@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </header>
 
-        <!-- Main Content Area (จัดให้อยู่ตรงกลาง) -->
+        <!-- Main Content Area -->
         <div class="flex-1 overflow-y-auto p-8 w-full">
             <div class="max-w-3xl mx-auto space-y-6">
             
@@ -199,19 +199,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider">
                                     ตำแหน่ง / สิทธิ์การใช้งาน (Role) <span class="text-rose-500">*</span>
                                 </label>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <!-- Staff -->
                                     <label class="flex items-center gap-3 p-4 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-50 transition-all">
                                         <input type="radio" name="role" value="Staff" checked onclick="document.getElementById('user_type_id').value=3" class="w-4 h-4 text-brandGreen focus:ring-brandGreen">
                                         <div>
                                             <p class="text-sm font-bold text-slate-800">พนักงาน (Staff)</p>
-                                            
                                         </div>
                                     </label>
+                                    <!-- Engineer -->
+                                    <label class="flex items-center gap-3 p-4 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-50 transition-all">
+                                        <input type="radio" name="role" value="Engineer" onclick="document.getElementById('user_type_id').value=2" class="w-4 h-4 text-brandGreen focus:ring-brandGreen">
+                                        <div>
+                                            <p class="text-sm font-bold text-slate-800">วิศวกร (Engineer)</p>
+                                        </div>
+                                    </label>
+                                    <!-- Admin -->
                                     <label class="flex items-center gap-3 p-4 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-50 transition-all">
                                         <input type="radio" name="role" value="admin" onclick="document.getElementById('user_type_id').value=1" class="w-4 h-4 text-brandGreen focus:ring-brandGreen">
                                         <div>
                                             <p class="text-sm font-bold text-slate-800">ผู้ดูแลระบบ (Admin)</p>
-                                            
                                         </div>
                                     </label>
                                 </div>

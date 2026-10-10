@@ -7,9 +7,9 @@ header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
 
 require_once '../db/conn.php';
 require_once '../auth_check.php';
-$current_page = 'project_list_admin'; // กำหนดชื่อหน้าสำหรับ Sidebar (แนะนำให้เพิ่มเมนูนี้ใน sidebar.php ถ้าต้องการไฮไลต์)
+$current_page = 'project_list_admin'; 
 
-// ดึงข้อมูลโครงการทั้งหมด พร้อมคำนวณต้นทุนอุปกรณ์สุทธิจาก stock_transactions ที่ผูกกับ installation_id
+// ดึงข้อมูลโครงการ พร้อมคำนวณต้นทุนอุปกรณ์สุทธิจาก stock_transactions ที่ผูกกับ installation_id
 try {
     $stmt = $pdo->query("
         SELECT 
@@ -60,7 +60,7 @@ try {
 <body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
 
     <!-- Sidebar -->
-    <?php include 'sidebar.php'; ?>
+    <?php include 'sidebar_admin.php'; ?>
 
     <!-- Main Content -->
     <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100">
@@ -110,11 +110,15 @@ try {
                                     $net_cost = $total_out - $total_return;
                                     $map_url = $loc['map_url'] ?? '';
                                     $sys_size = trim($loc['system_size'] ?? '');
+                                    
+                                    // ตรวจสอบและกรองข้อมูล JSON ในช่อง description ไม่ให้แสดงเป็นโค้ดดิบ
+                                    $raw_desc = $loc['description'] ?? '';
+                                    $is_json = (json_decode($raw_desc, true) !== null);
+                                    $display_desc = $is_json ? '-' : $raw_desc;
                                 ?>
                                     <tr class="hover:bg-slate-50/80 transition-all">
                                         <td class="py-3.5 px-4 font-bold text-slate-900">
                                             <?= htmlspecialchars($loc['name'] ?? $loc['project_name'] ?? '-') ?>
-                                            <div class="text-[10px] text-slate-400 font-normal">ID: #<?= $loc['id'] ?></div>
                                         </td>
                                         <td class="py-3.5 px-4">
                                             <?php if (!empty($sys_size)): ?>
@@ -125,7 +129,7 @@ try {
                                                 <span class="text-slate-300">-</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td class="py-3.5 px-4 text-slate-500"><?= htmlspecialchars($loc['description'] ?? '-') ?></td>
+                                        <td class="py-3.5 px-4 text-slate-500"><?= htmlspecialchars($display_desc !== '' ? $display_desc : '-') ?></td>
                                         <td class="py-3.5 px-4 text-center">
                                             <?php if (!empty($map_url)): ?>
                                                 <a href="<?= htmlspecialchars($map_url) ?>" target="_blank" class="inline-flex items-center gap-1.5 bg-sky-50 text-sky-700 border border-sky-200/60 px-3 py-1.5 rounded-xl font-semibold hover:bg-sky-100 transition-all">

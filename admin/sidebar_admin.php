@@ -4,13 +4,20 @@ $current_page = basename($_SERVER['PHP_SELF'], ".php");
 
 $display_name = $_SESSION['name'] ?? '';
 $display_role = $_SESSION['role'] ?? $_SESSION['user_role'] ?? 'Admin';
+// นับจำนวนผู้ใช้งานทั้งหมดในตาราง users
+try {
+    $stmt_user_count = $pdo->query("SELECT COUNT(*) FROM users");
+    $user_count = $stmt_user_count->fetchColumn();
+} catch (PDOException $e) {
+    $user_count = 0; // เผื่อกรณีเกิด Error ให้แสดงเป็น 0
+}
 ?>
 <!-- 🌐 ส่วนเมนูด้านซ้าย (Sidebar) -->
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SolarStock Pro</title>
+    <title>รับเข้าสินค้า - SolarStock Pro</title>
     <link rel="icon" type="image/png" href="../Pic/SW.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome CSS -->
@@ -57,64 +64,85 @@ $display_role = $_SESSION['role'] ?? $_SESSION['user_role'] ?? 'Admin';
 
         <!-- รายการเมนู -->
         <div class="flex-1 overflow-y-auto py-5 px-3.5 space-y-1.5 text-xs font-medium">
-            <a href="dashboard_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'dashboard') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
-                <i class="fas fa-calendar-alt w-5 text-center text-sm"></i> ข้อมูล Dashboard
+            <a href="dashboard_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'dashboard_admin') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+                <i class="fas fa-layer-group w-5 text-center text-sm"></i> ข้อมูล Dashboard
             </a>
-            <a href="calendar_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'calendar') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+            <a href="calendar_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'calendar_admin') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
                 <i class="fas fa-calendar-alt w-5 text-center text-sm"></i> Calendar (ปฏิทินงาน)
             </a>
-            <a href="inventory_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'inventory') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+            <a href="inventory_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'inventory_admin') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
                 <i class="fas fa-boxes w-5 text-center text-sm"></i> สต็อกคงเหลือ
             </a>
-            <a href="stockin_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'stockin') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+            <a href="stockin_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'stockin_admin') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
                 <i class="fas fa-cart-arrow-down w-5 text-center text-sm"></i> รับเข้าสินค้า
             </a>
-            <a href="stockout_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'stockout') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+            <a href="stockout_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'stockout_admin') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
                 <i class="fas fa-truck-loading w-5 text-center text-sm"></i> จ่ายออกสินค้า
             </a>
-            <a href="expenses_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'expenses') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+            <a href="expenses_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'expenses_admin') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
                 <i class="fas fa-receipt w-5 text-center text-sm"></i> ค่าใช้จ่ายอื่นๆ
             </a>
-            <a href="addproduct_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'addproduct') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+            <a href="addproduct_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'addproduct_admin') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
                 <i class="fas fa-plus-circle w-5 text-center text-sm"></i> เพิ่มสินค้าใหม่
             </a>
+            
+            <a href="admin_requisitions.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'admin_requisitions') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+                <i class="fas fa-circle-check w-5 text-center text-sm"></i> ตรวจสอบและอนุมัติใบเบิกของ
+            </a>
 
-            <!-- 📂 เมนูสถานที่ติดตั้ง (แบบมี Dropdown และความไวสูง) -->
+
+            <?php
+            // ตรวจสอบว่าอยู่หน้าในกลุ่มสถานที่ติดตั้งหรือไม่
+            $is_location_active = ($current_page == 'add_installation_admin' || $current_page == 'project_list_admin');
+            ?>
+            <!-- 📂 เมนูสถานที่ติดตั้ง (กางค้างไว้ทันทีเมื่ออยู่หน้าย่อย) -->
             <div class="space-y-1">
-                <button onclick="toggleLocationsDropdown()" class="menu-item w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'locations' || $current_page == 'project_list') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+                <button onclick="toggleLocationsDropdown()" class="menu-item w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all <?= $is_location_active ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
                     <div class="flex items-center gap-3.5">
                         <i class="fas fa-map-marker-alt w-5 text-center text-sm"></i>
                         <span>สถานที่ติดตั้ง</span>
                     </div>
-                    <i id="locChevron" class="fa-solid fa-chevron-down text-xs transition-transform duration-500"></i>
+                    <i id="locChevron" class="fa-solid fa-chevron-down text-xs transition-transform duration-500 <?= $is_location_active ? 'rotate-180' : '' ?>"></i>
                 </button>
 
-                <!-- รวมเมนูย่อยไว้ใน div เดียวกันโดยไม่ให้ id ซ้ำกัน -->
-                <div id="locationsSubmenu" style="max-height: 0px;" class="overflow-hidden transition-all duration-500 ease-in-out pl-9 pr-2 space-y-1">
-                    <a href="locations_admin.php" class="block px-3 py-2 rounded-xl text-xs font-medium transition-all <?= ($current_page == 'locations') ? 'bg-emerald-800/60 text-white font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/40' ?>">
+                <!-- เมนูย่อย: กำหนด max-h ทันทีใน PHP ถ้าอยู่ในหน้าย่อย -->
+                <div id="locationsSubmenu" style="max-height: <?= $is_location_active ? '120px' : '0px' ?>;" class="overflow-hidden transition-all duration-500 ease-in-out pl-9 pr-2 space-y-1">
+                    <a href="add_installation_admin.php" class="block px-3 py-2 rounded-xl text-xs font-medium transition-all <?= ($current_page == 'add_installation_admin') ? 'bg-emerald-800/60 text-white font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/40' ?>">
                         <i class="fa-solid fa-list-ul mr-2"></i> จัดการสถานที่ติดตั้ง
                     </a>
-                    <a href="project_list_admin.php" class="block px-3 py-2 rounded-xl text-xs font-medium transition-all <?= ($current_page == 'project_list') ? 'bg-emerald-800/60 text-white font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/40' ?>">
+                    <a href="project_list_admin.php" class="block px-3 py-2 rounded-xl text-xs font-medium transition-all <?= ($current_page == 'project_list_admin') ? 'bg-emerald-800/60 text-white font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/40' ?>">
                         <i class="fa-solid fa-file-invoice-dollar mr-2"></i> รายการโครงการและต้นทุน
                     </a>
                 </div>
             </div>
 
-            <a href="expenses_summary.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'expenses_summary') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
-                <i class="fas fas fa-file-invoice w-5 text-center text-sm"></i> สรุปค่าใช้จ่าย
+            <a href="expenses_summary_admin.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'expenses_summary_admin') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+                <i class="fas fa-file-invoice w-5 text-center text-sm"></i> สรุปค่าใช้จ่าย
             </a>
 
             <div class="pt-3 pb-2">
                 <hr id="sidebarDivider" class="border-slate-800/80 transition-colors duration-200">
             </div>
 
-            <a href="orders.php" class="menu-item w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'orders') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+            <!-- <a href="orders_admin.php" class="menu-item w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'orders_admin') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
                 <div class="flex items-center gap-3.5"><i class="fas fa-shopping-bag w-5 text-center text-sm"></i> สั่งซื้อสินค้า</div>
                 <span class="badge-count bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full">0</span>
             </a>
-            <a href="pending.php" class="menu-item w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'pending') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+            <a href="pending_admin.php" class="menu-item w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'pending_admin') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
                 <div class="flex items-center gap-3.5"><i class="fas fa-shipping-fast w-5 text-center text-sm"></i> รอรับสินค้า</div>
                 <span class="bg-emerald-950/80 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-800/50">0</span>
+            </a> -->
+            <a href="manage_users.php" class="menu-item w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'manage_users') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+                <div class="flex items-center gap-3.5">
+                    <i class="fas fa-circle-user w-5 text-center text-sm"></i> จัดการผู้ใช้งาน
+                </div>
+                <span class="badge-count bg-emerald-950/80 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-800/50">
+                    <?= number_format($user_count) ?>
+                </span>
+            </a>
+            <a href="add_user.php" class="menu-item w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'add_user') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+                <div class="flex items-center gap-3.5"><i class="fas fa-user-plus w-5 text-center text-sm"></i> เพิ่มผู้ใช้งาน</div>
+                <span class="badge-count bg-emerald-950/80 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-800/50">0</span>
             </a>
         </div>
 
@@ -147,7 +175,7 @@ $display_role = $_SESSION['role'] ?? $_SESSION['user_role'] ?? 'Admin';
         </div>
     </aside>
 
-    <!-- สคริปต์ควบคุมการทำงานและความไว -->
+    <!-- สคริปต์สลับสีเฉพาะ Sidebar และบันทึกค่าผ่าน localStorage -->
     <script>
         const sidebar = document.getElementById('appSidebar');
         const sidebarHeader = document.getElementById('sidebarHeader');
@@ -160,7 +188,7 @@ $display_role = $_SESSION['role'] ?? $_SESSION['user_role'] ?? 'Admin';
         const menuItems = document.querySelectorAll('.menu-item');
         const badgeCounts = document.querySelectorAll('.badge-count');
 
-        // ฟังก์ชันเปิด/ปิด Dropdown ของสถานที่ติดตั้ง
+        // ฟังก์ชันเปิด/ปิด Dropdown ของสถานที่ติดตั้ง (ความเร็ว 500ms)
         function toggleLocationsDropdown() {
             const submenu = document.getElementById('locationsSubmenu');
             const chevron = document.getElementById('locChevron');
@@ -174,19 +202,7 @@ $display_role = $_SESSION['role'] ?? $_SESSION['user_role'] ?? 'Admin';
             }
         }
 
-        // เปิดเมนูย่อยอัตโนมัติทันทีหากกำลังใช้งานหน้า locations หรือ project_list
-        <?php if ($current_page == 'locations' || $current_page == 'project_list'): ?>
-            document.addEventListener('DOMContentLoaded', () => {
-                const submenu = document.getElementById('locationsSubmenu');
-                const chevron = document.getElementById('locChevron');
-                if (submenu && chevron) {
-                    submenu.style.maxHeight = submenu.scrollHeight + "px";
-                    chevron.classList.add('rotate-180');
-                }
-            });
-        <?php endif; ?>
-
-        // ตรวจสอบค่าที่บันทึกไว้ในเบราว์เซอร์สำหรับธีม Sidebar
+        // ตรวจสอบค่าที่บันทึกไว้ในเบราว์เซอร์
         if (localStorage.getItem('sidebar_theme') === 'light') {
             applyLightSidebar();
         } else {
@@ -204,6 +220,7 @@ $display_role = $_SESSION['role'] ?? $_SESSION['user_role'] ?? 'Admin';
         }
 
         function applyLightSidebar() {
+            // เปลี่ยนเป็นธีม Sidebar สว่าง
             sidebar.className = "w-64 bg-white text-slate-700 flex flex-col h-full shrink-0 border-r border-slate-200 transition-colors duration-200";
             sidebarHeader.className = "h-20 flex items-center px-6 border-b border-slate-200 gap-3 transition-colors duration-200";
             sidebarTitle.className = "text-slate-900 font-bold text-lg tracking-tight";
@@ -226,6 +243,7 @@ $display_role = $_SESSION['role'] ?? $_SESSION['user_role'] ?? 'Admin';
         }
 
         function applyDarkSidebar() {
+            // คืนค่าเป็นธีม Sidebar มืด (ค่าเริ่มต้น)
             sidebar.className = "w-64 bg-darkSidebar text-slate-300 flex flex-col h-full shrink-0 border-r border-slate-800 transition-colors duration-200";
             sidebarHeader.className = "h-20 flex items-center px-6 border-b border-slate-800/80 gap-3 transition-colors duration-200";
             sidebarTitle.className = "text-white font-bold text-lg tracking-tight";
@@ -246,6 +264,16 @@ $display_role = $_SESSION['role'] ?? $_SESSION['user_role'] ?? 'Admin';
                 badge.className = "badge-count bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full";
             });
         }
+        // ตรวจสอบและบังคับใช้ธีม Sidebar ทันทีที่โหลดหน้า เพื่อป้องกันการกะพริบหรือสลับเอง
+        (function() {
+            if (localStorage.getItem('sidebar_theme') === 'light') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    if (typeof applyLightSidebar === 'function') {
+                        applyLightSidebar();
+                    }
+                });
+            }
+        })();
     </script>
 </body>
 

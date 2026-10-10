@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['username']     = $user['username'];
                 $_SESSION['name']         = $user['name']; 
                 $_SESSION['role']         = strtolower($user['type_name']); 
-                $_SESSION['user_type_id'] = $user['user_type_id']; // รหัสสิทธิ์ (1=Admin, 2=CEO, 3=User)
+                $_SESSION['user_type_id'] = $user['user_type_id']; // รหัสสิทธิ์ (1=Admin, 2=Engineer, 3=User)
                 
                 $login_success = true; 
             } else {
@@ -176,9 +176,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (userTypeId == '1') {
                 window.location.href = 'admin/dashboard_admin.php'; // สิทธิ์ Admin
             } else if (userTypeId == '2') {
-                window.location.href = 'ceo/dashboard.php';         // สิทธิ์ CEO
+                window.location.href = 'engineer/dashboard_engineer.php';    // สิทธิ์ Engineer
             } else {
-                window.location.href = 'User/dashboard.php';        // สิทธิ์ User ทั่วไป
+                window.location.href = 'User/dashboard.php';       // สิทธิ์ User ทั่วไป
             }
         }
         <?php endif; ?>
