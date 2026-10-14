@@ -64,26 +64,41 @@ try {
         }
     </script>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
+<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden relative">
 
-    <?php 
-    if (file_exists('sidebar_admin.php')) {
-        include 'sidebar_admin.php';
-    }
-    ?>
+    <!-- Sidebar สำหรับมือถือ (สไลด์เปิด-ปิด) และคอมพิวเตอร์ (แสดงปกติ) -->
+    <div id="sidebarWrapper" class="fixed md:static inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out bg-white border-r border-slate-200 w-64 shrink-0 flex flex-col shadow-xl md:shadow-none h-full overflow-y-auto">
+        
+        <div class="flex-1 overflow-y-auto">
+            <?php 
+            if (file_exists('sidebar_admin.php')) {
+                include 'sidebar_admin.php';
+            }
+            ?>
+        </div>
+    </div>
 
-    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100">
+    <!-- Background Overlay เมื่อเปิด Sidebar บนมือถือ -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden"></div>
+
+    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100 w-full">
         
         <!-- Header Bar -->
-        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-10 shrink-0 shadow-sm">
-            <div>
-                <h2 class="text-xl font-bold text-slate-900 tracking-tight">ตรวจสอบและอนุมัติใบเบิกของ (Admin Approval)</h2>
-                <p class="text-sm text-slate-500 mt-0.5">ตรวจสอบรายละเอียดและอนุมัติใบเบิกเพื่อส่งต่อให้ฝั่ง User แสดงผล</p>
+        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 shrink-0 shadow-sm z-10">
+            <div class="flex items-center gap-3">
+                <!-- ปุ่มแฮมเบอร์เกอร์ เปิด/ปิด Sidebar เฉพาะบนมือถือ -->
+                <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+                <div>
+                    <h2 class="text-sm md:text-xl font-bold text-slate-900 tracking-tight truncate">ตรวจสอบและอนุมัติใบเบิกของ (Admin Approval)</h2>
+                    <p class="text-xs text-slate-500 mt-0.5 hidden sm:block">ตรวจสอบรายละเอียดและอนุมัติใบเบิกเพื่อส่งต่อให้ฝั่ง User แสดงผล</p>
+                </div>
             </div>
         </header>
 
         <!-- Main Content -->
-        <div class="flex-1 overflow-y-auto p-8">
+        <div class="flex-1 overflow-y-auto p-4 lg:p-8">
             <div class="max-w-6xl mx-auto space-y-6">
 
                 <!-- Alert Messages -->
@@ -99,7 +114,7 @@ try {
                 <?php endif; ?>
 
                 <!-- Filter Tabs -->
-                <div class="flex gap-2">
+                <div class="flex flex-wrap gap-2">
                     <a href="admin_requisitions.php?status=Pending" class="px-4 py-2 rounded-xl text-xs font-bold transition-all <?= $status_filter === 'Pending' ? 'bg-amber-500 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50' ?>">
                         <i class="fa-solid fa-clock me-1"></i> รอตรวจสอบ (Pending)
                     </a>
@@ -114,10 +129,9 @@ try {
                 <!-- Table Section -->
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse text-xs">
+                        <table class="w-full text-left border-collapse text-xs min-w-[600px]">
                             <thead>
                                 <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase">
-                                    
                                     <th class="py-3 px-4">ชื่อโครงการ / หน้างาน</th>
                                     <th class="py-3 px-4">วันที่เบิก</th>
                                     <th class="py-3 px-4">วิศวกรผู้ขอ</th>
@@ -129,20 +143,19 @@ try {
                                 <?php if (!empty($requisitions)): ?>
                                     <?php foreach ($requisitions as $req): ?>
                                         <tr class="hover:bg-slate-50/50">
-                                            
                                             <td class="py-3 px-4 font-semibold text-slate-900"><?= htmlspecialchars($req['project_name'] ?? '-') ?></td>
                                             <td class="py-3 px-4"><?= htmlspecialchars($req['req_date'] ?? '-') ?></td>
                                             <td class="py-3 px-4"><?= htmlspecialchars($req['engineer_name'] ?? '-') ?></td>
                                             <td class="py-3 px-4 text-center">
                                                 <?php if($req['status'] === 'Pending'): ?>
-                                                    <span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-bold">รอตรวจสอบ</span>
+                                                    <span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-bold whitespace-nowrap">รอตรวจสอบ</span>
                                                 <?php elseif($req['status'] === 'Approved'): ?>
-                                                    <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-bold">อนุมัติแล้ว (ส่งไป User)</span>
+                                                    <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-bold whitespace-nowrap">อนุมัติแล้ว (ส่งไป User)</span>
                                                 <?php else: ?>
-                                                    <span class="px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 font-bold">ไม่อนุมัติ</span>
+                                                    <span class="px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 font-bold whitespace-nowrap">ไม่อนุมัติ</span>
                                                 <?php endif; ?>
                                             </td>
-                                            <td class="py-3 px-4 text-center space-x-1">
+                                            <td class="py-3 px-4 text-center space-x-1 whitespace-nowrap">
                                                 <!-- ปุ่มดูรายละเอียด -->
                                                 <button type="button" onclick="openDetailModal(<?= $req['id'] ?>)" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-xl font-bold transition-all">
                                                     <i class="fa-solid fa-eye me-1"></i> ดูรายการ
@@ -170,7 +183,7 @@ try {
                                     <?php endforeach; ?>
                                 <?php else: ?>
                                     <tr>
-                                        <td colspan="6" class="text-center py-8 text-slate-400">ไม่พบรายการใบเบิกในสถานะนี้</td>
+                                        <td colspan="5" class="text-center py-8 text-slate-400">ไม่พบรายการใบเบิกในสถานะนี้</td>
                                     </tr>
                                 <?php endif; ?>
                             </tbody>
@@ -201,13 +214,20 @@ try {
     </div>
 
     <script>
+        // ฟังก์ชันควบคุมเปิด/ปิด Sidebar บนมือถือ
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebarWrapper');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+        }
+
         function openDetailModal(reqId) {
             document.getElementById('modalReqId').innerText = '#' + reqId;
             document.getElementById('detailModal').classList.remove('hidden');
             document.getElementById('detailModal').classList.add('flex');
             document.getElementById('modalContent').innerHTML = '<div class="text-center py-6 text-slate-400">กำลังโหลดข้อมูล...</div>';
 
-            // ดึงข้อมูลรายละเอียดผ่าน AJAX (สร้างไฟล์ get_requisition_detail.php หรือดึงผ่าน API ในตัว)
             fetch('get_requisition_detail.php?id=' + reqId)
                 .then(response => response.text())
                 .then(data => {

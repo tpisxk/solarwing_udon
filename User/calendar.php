@@ -119,12 +119,7 @@ $action = $_GET['action'] ?? '';
 
     <!-- Sidebar พร้อมคลาสสำหรับซ่อน/แสดง -->
     <div id="sidebar" class="fixed lg:static inset-y-0 left-0 z-30 transform -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out bg-white border-r border-slate-200 w-64 flex-shrink-0 flex flex-col">
-        <div class="h-16 lg:h-20 flex items-center justify-between px-4 border-b border-slate-100 shrink-0 lg:hidden">
-            <span class="font-bold text-slate-800 text-sm">SolarStock Menu</span>
-            <button onclick="toggleSidebar()" class="text-slate-500 hover:text-slate-800 p-2 rounded-lg">
-                <i class="fa-solid fa-xmark text-lg"></i>
-            </button>
-        </div>
+        
         <div class="flex-1 overflow-y-auto">
             <?php include 'sidebar.php'; ?>
         </div>
@@ -142,13 +137,13 @@ $action = $_GET['action'] ?? '';
                 <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
                     <i class="fa-solid fa-bars text-lg"></i>
                 </button>
-                <!-- ปุ่มพับ/ซ่อน Sidebar บนคอมพิวเตอร์ -->
-                <button onclick="toggleDesktopSidebar()" class="hidden lg:flex text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none items-center justify-center">
-                    <i class="fa-solid fa-outdent text-lg"></i>
-                </button>
+                <!-- <span class="relative flex h-3 w-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                </span> -->
                 <div>
                     <h2 class="text-lg lg:text-xl font-bold text-slate-900 tracking-tight">ปฏิทินงานและนัดหมาย</h2>
-                    <p class="text-xs lg:text-sm text-slate-500 mt-0.5">จัดการและตรวจสอบตารางเวลางานติดตั้งหรือนัดหมายลูกค้า</p>
+                    <!-- <p class="text-xs lg:text-sm text-slate-500 mt-0.5">จัดการและตรวจสอบตารางเวลางานติดตั้งหรือนัดหมายลูกค้า</p> -->
                 </div>
             </div>
             <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2 shrink-0">

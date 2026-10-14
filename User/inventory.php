@@ -8,15 +8,15 @@ require_once '../db/conn.php';
 require_once '../auth_check.php';
 
 // จัดการอัปเดตราคาต้นทุนผ่าน AJAX
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) &&$_POST['action'] === 'update_cost') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_cost') {
     header('Content-Type: application/json; charset=utf-8');
     $product_id = intval($_POST['product_id'] ?? 0);
     $new_cost = floatval($_POST['cost_price'] ?? 0);
 
-    if ($product_id > 0 &&$new_cost >= 0) {
+    if ($product_id > 0 && $new_cost >= 0) {
         try {
-            $stmt =$pdo->prepare("UPDATE products SET cost_price = ? WHERE id = ?");
-            $stmt->execute([$new_cost,$product_id]);
+            $stmt = $pdo->prepare("UPDATE products SET cost_price = ? WHERE id = ?");
+            $stmt->execute([$new_cost, $product_id]);
             echo json_encode(['status' => 'success', 'message' => 'อัปเดตราคาต้นทุนเรียบร้อยแล้ว']);
             exit();
         } catch (PDOException $e) {
@@ -29,18 +29,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) &&$_POST['a
 }
 
 // ดึงข้อมูลสินค้าทั้งหมด เรียงตามรหัส SKU
-$stmt =$pdo->query("SELECT * FROM products ORDER BY sku ASC");
-$products =$stmt->fetchAll(PDO::FETCH_ASSOC);
+$stmt = $pdo->query("SELECT * FROM products ORDER BY sku ASC");
+$products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // จัดกลุ่มหมวดหมู่ตามตัวอักษรนำหน้า (ตัดตัวเลขและเครื่องหมายขีดออก เช่น SR1 -> SR)
 $skuGroups = [];
-foreach ($products as$row) {
+foreach ($products as $row) {
     $sku = trim($row['sku']);
     if (!empty($sku)) {
-        preg_match('/^[A-Za-z]+/', $sku, $matches);$prefix = !empty($matches[0]) ? strtoupper($matches[0]) : 'OT';
-        
-        if (!in_array($prefix,$skuGroups)) {
-            $skuGroups[] =$prefix;
+        preg_match('/^[A-Za-z]+/', $sku, $matches);
+        $prefix = !empty($matches[0]) ? strtoupper($matches[0]) : 'OT';
+
+        if (!in_array($prefix, $skuGroups)) {
+            $skuGroups[] = $prefix;
         }
     }
 }
@@ -48,6 +49,7 @@ sort($skuGroups);
 ?>
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -58,37 +60,55 @@ sort($skuGroups);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- SheetJS สำหรับแปลงไฟล์ Excel (.xlsx, .xls) และ CSV -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    
+
     <script>
         tailwind.config = {
             theme: {
                 extend: {
-                    fontFamily: { sans: ['Prompt', 'Inter', 'sans-serif'] },
-                    colors: { darkSidebar: '#000007', brandGreen: '#059669' }
+                    fontFamily: {
+                        sans: ['Prompt', 'Inter', 'sans-serif']
+                    },
+                    colors: {
+                        darkSidebar: '#000007',
+                        brandGreen: '#059669'
+                    }
                 }
             }
         }
     </script>
     <style>
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
-        .cost-input:focus { background: #ffffff !important; border-color: #059669 !important; box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.15); }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 4px;
+        }
+
+        .cost-input:focus {
+            background: #ffffff !important;
+            border-color: #059669 !important;
+            box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.15);
+        }
     </style>
 </head>
+
 <body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
 
-    <!-- Sidebar สำหรับมือถือและเดสก์ท็อป -->
-    <div id="sidebarWrapper" class="fixed inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 md:static transition-transform duration-300 ease-in-out">
+    <!-- Sidebar แสดงเฉพาะมือถือ (ซ่อนบนคอมพิวเตอร์ด้วย md:hidden) -->
+    <div id="sidebarWrapper" class="fixed inset-y-0 left-0 z-50 transform -translate-x-full transition-transform duration-300 ease-in-out md:hidden">
         <?php if (file_exists('sidebar.php')) include 'sidebar.php'; ?>
     </div>
     <div id="sidebarBackdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden backdrop-blur-sm"></div>
 
     <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100 w-full">
-        
+
         <!-- Header Bar -->
         <header class="h-20 bg-white border-b border-slate-200/80 flex items-center justify-between px-6 md:px-10 shrink-0 z-10 shadow-xs">
             <div class="flex items-center gap-3">
-                <button onclick="toggleSidebar()" class="md:hidden text-slate-600 p-2.5 rounded-xl bg-slate-100 border border-slate-200 hover:bg-slate-200 transition-all">
+                <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
                     <i class="fa-solid fa-bars text-sm"></i>
                 </button>
                 <h2 class="text-base md:text-xl font-bold text-slate-900 tracking-tight">สต็อกคงเหลือ (Inventory Status)</h2>
@@ -100,7 +120,7 @@ sort($skuGroups);
 
         <!-- Main Body -->
         <div class="flex-1 overflow-y-auto p-4 md:p-10 space-y-6">
-            
+
             <!-- แจ้งเตือนสถานะการแก้ไขราคาหรือ Import -->
             <div id="alertBox" class="hidden px-6 py-4 rounded-2xl text-sm font-medium items-center justify-between shadow-xs"></div>
 
@@ -138,19 +158,22 @@ sort($skuGroups);
                     <button onclick="filterGroup('all')" id="group-all" class="group-tab px-4 py-2.5 rounded-2xl text-xs font-semibold bg-emerald-600 text-white shadow-sm transition-all shrink-0 whitespace-nowrap">
                         📂 ทั้งหมด (<?= count($products) ?>)
                     </button>
-                    <?php foreach ($skuGroups as$grp): ?>
-                        <?php 
-                            $grpCount = 0;
-                            foreach ($products as$p) {
-                                $pSku = trim($p['sku']);
-                                if (!empty($pSku)) {
-                                    preg_match('/^[A-Za-z]+/', $pSku, $m);$pPrefix = !empty($m[0]) ? strtoupper($m[0]) : 'OT';
-                                    if ($pPrefix === $grp) {$grpCount++; }
+                    <?php foreach ($skuGroups as $grp): ?>
+                        <?php
+                        $grpCount = 0;
+                        foreach ($products as $p) {
+                            $pSku = trim($p['sku']);
+                            if (!empty($pSku)) {
+                                preg_match('/^[A-Za-z]+/', $pSku, $m);
+                                $pPrefix = !empty($m[0]) ? strtoupper($m[0]) : 'OT';
+                                if ($pPrefix === $grp) {
+                                    $grpCount++;
                                 }
                             }
+                        }
                         ?>
                         <button onclick="filterGroup('<?= htmlspecialchars($grp, ENT_QUOTES) ?>')" id="group-<?= htmlspecialchars($grp) ?>" class="group-tab px-4 py-2.5 rounded-2xl text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all shrink-0 whitespace-nowrap">
-                            🏷️ หมวด <?= htmlspecialchars($grp) ?> (<?=$grpCount ?>)
+                            🏷️ หมวด <?= htmlspecialchars($grp) ?> (<?= $grpCount ?>)
                         </button>
                     <?php endforeach; ?>
                 </div>
@@ -171,10 +194,11 @@ sort($skuGroups);
                         </thead>
                         <tbody class="divide-y divide-slate-100" id="productTableBody">
                             <?php if (count($products) > 0): ?>
-                                <?php foreach ($products as$row): ?>
-                                    <?php 
-                                        $sku = trim($row['sku']);
-                                        preg_match('/^[A-Za-z]+/', $sku, $m);$rowGroup = !empty($m[0]) ? strtoupper($m[0]) : 'OT';
+                                <?php foreach ($products as $row): ?>
+                                    <?php
+                                    $sku = trim($row['sku']);
+                                    preg_match('/^[A-Za-z]+/', $sku, $m);
+                                    $rowGroup = !empty($m[0]) ? strtoupper($m[0]) : 'OT';
                                     ?>
                                     <tr class="hover:bg-slate-50/80 transition-colors product-row" data-sku-prefix="<?= htmlspecialchars($rowGroup, ENT_QUOTES) ?>">
                                         <td class="p-5 font-bold text-slate-700">
@@ -188,10 +212,10 @@ sort($skuGroups);
                                         <td class="p-5 text-right font-medium">
                                             <div class="inline-flex items-center gap-1 justify-end">
                                                 <span class="text-slate-400 text-xs">฿</span>
-                                                <input type="number" step="0.01" min="0" value="<?= $row['cost_price'] ?>" 
-                                                       data-id="<?= $row['id'] ?>" 
-                                                       onchange="updateCostPrice(this)" 
-                                                       class="cost-input w-28 px-3 py-1.5 text-right border border-slate-200 rounded-xl text-xs font-bold text-slate-800 bg-slate-50 transition-all">
+                                                <input type="number" step="0.01" min="0" value="<?= $row['cost_price'] ?>"
+                                                    data-id="<?= $row['id'] ?>"
+                                                    onchange="updateCostPrice(this)"
+                                                    class="cost-input w-28 px-3 py-1.5 text-right border border-slate-200 rounded-xl text-xs font-bold text-slate-800 bg-slate-50 transition-all">
                                             </div>
                                         </td>
                                         <td class="p-5 text-right font-bold text-brandGreen"><?= number_format($row['stock_quantity']) ?></td>
@@ -211,7 +235,7 @@ sort($skuGroups);
                     <div class="text-xs text-slate-500 font-medium" id="tableInfo">
                         กำลังแสดง 0 ถึง 0 จาก 0 รายการ
                     </div>
-                    
+
                     <div class="flex items-center gap-4 flex-wrap justify-end">
                         <div class="flex items-center gap-2 text-xs font-semibold text-slate-600">
                             <span>แสดง:</span>
@@ -238,7 +262,7 @@ sort($skuGroups);
                 <h3 class="text-lg md:text-xl font-bold text-slate-900">นำเข้าข้อมูลสต็อก (Excel / CSV)</h3>
                 <button onclick="closeImportModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
             </div>
-            
+
             <form action="import_process.php" method="POST" enctype="multipart/form-data" id="importForm" class="space-y-4">
                 <input type="hidden" name="converted_csv_data" id="convertedCsvData">
 
@@ -270,21 +294,21 @@ sort($skuGroups);
 
         function filterGroup(group) {
             currentGroup = group;
-            
+
             document.querySelectorAll('.group-tab').forEach(btn => {
                 btn.classList.remove('bg-emerald-600', 'text-white', 'shadow-sm');
                 btn.classList.add('bg-white', 'text-slate-600', 'border', 'border-slate-200');
             });
-            
+
             if (group === 'all') {
                 let activeBtn = document.getElementById('group-all');
-                if(activeBtn) {
+                if (activeBtn) {
                     activeBtn.classList.remove('bg-white', 'text-slate-600', 'border', 'border-slate-200');
                     activeBtn.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
                 }
             } else {
                 let activeBtn = document.getElementById('group-' + group);
-                if(activeBtn) {
+                if (activeBtn) {
                     activeBtn.classList.remove('bg-white', 'text-slate-600', 'border', 'border-slate-200');
                     activeBtn.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
                 }
@@ -312,7 +336,7 @@ sort($skuGroups);
             let matchedRows = rows.filter(row => {
                 let rowPrefix = row.getAttribute('data-sku-prefix');
                 let rowText = row.innerText.toLowerCase();
-                
+
                 let matchesGroup = (currentGroup === 'all' || rowPrefix === currentGroup);
                 let matchesSearch = rowText.includes(searchFilter);
 
@@ -378,27 +402,27 @@ sort($skuGroups);
             formData.append('cost_price', newCost);
 
             fetch('inventory.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                let alertBox = document.getElementById('alertBox');
-                alertBox.classList.remove('hidden');
-                alertBox.classList.add('flex');
-                
-                if (data.status === 'success') {
-                    alertBox.className = 'flex px-6 py-4 rounded-2xl text-sm font-medium items-center justify-between shadow-xs bg-emerald-50 text-emerald-800 border border-emerald-200';
-                    alertBox.innerHTML = `<span>✨ ${data.message}</span><button onclick="this.parentElement.classList.add('hidden')" class="font-bold text-xs">✕ ปิด</button>`;
-                } else {
-                    alertBox.className = 'flex px-6 py-4 rounded-2xl text-sm font-medium items-center justify-between shadow-xs bg-rose-50 text-rose-800 border border-rose-200';
-                    alertBox.innerHTML = `<span>❌ ${data.message}</span><button onclick="this.parentElement.classList.add('hidden')" class="font-bold text-xs">✕ ปิด</button>`;
-                }
-                setTimeout(() => alertBox.classList.add('hidden'), 3500);
-            })
-            .catch(error => {
-                alert('เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อบันทึกราคา');
-            });
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    let alertBox = document.getElementById('alertBox');
+                    alertBox.classList.remove('hidden');
+                    alertBox.classList.add('flex');
+
+                    if (data.status === 'success') {
+                        alertBox.className = 'flex px-6 py-4 rounded-2xl text-sm font-medium items-center justify-between shadow-xs bg-emerald-50 text-emerald-800 border border-emerald-200';
+                        alertBox.innerHTML = `<span>✨ ${data.message}</span><button onclick="this.parentElement.classList.add('hidden')" class="font-bold text-xs">✕ ปิด</button>`;
+                    } else {
+                        alertBox.className = 'flex px-6 py-4 rounded-2xl text-sm font-medium items-center justify-between shadow-xs bg-rose-50 text-rose-800 border border-rose-200';
+                        alertBox.innerHTML = `<span>❌ ${data.message}</span><button onclick="this.parentElement.classList.add('hidden')" class="font-bold text-xs">✕ ปิด</button>`;
+                    }
+                    setTimeout(() => alertBox.classList.add('hidden'), 3500);
+                })
+                .catch(error => {
+                    alert('เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อบันทึกราคา');
+                });
         }
 
         function openImportModal() {
@@ -406,6 +430,7 @@ sort($skuGroups);
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         }
+
         function closeImportModal() {
             let modal = document.getElementById('importModal');
             modal.classList.remove('flex');
@@ -422,10 +447,12 @@ sort($skuGroups);
                 reader.onload = function(e) {
                     try {
                         const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
+                        const workbook = XLSX.read(data, {
+                            type: 'array'
+                        });
                         const firstSheetName = workbook.SheetNames[0];
                         const worksheet = workbook.Sheets[firstSheetName];
-                        
+
                         const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
                         document.getElementById('convertedCsvData').value = csvOutput;
                     } catch (err) {
@@ -440,4 +467,5 @@ sort($skuGroups);
         }
     </script>
 </body>
+
 </html>

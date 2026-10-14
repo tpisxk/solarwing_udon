@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ตรวจสอบ CSRF Token
     if (empty($_POST['csrf_token']) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-        header("Location: calendar_engineer.php?status=error&message=csrf_invalid&month={$redirect_month}&year={$redirect_year}");
+        header("Location: calendar.php?status=error&message=csrf_invalid&month={$redirect_month}&year={$redirect_year}");
         exit();
     }
 
@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $id
                 ]);
 
-                header("Location: calendar_engineer.php?status=success&action=edit&month={$redirect_month}&year={$redirect_year}");
+                header("Location: calendar.php?status=success&action=edit&month={$redirect_month}&year={$redirect_year}");
                 exit();
             } else {
                 // INSERT นัดหมายใหม่
@@ -96,15 +96,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $details
                 ]);
 
-                header("Location: calendar_engineer.php?status=success&action=add&month={$redirect_month}&year={$redirect_year}");
+                header("Location: calendar.php?status=success&action=add&month={$redirect_month}&year={$redirect_year}");
                 exit();
             }
         } catch (PDOException $e) {
-            header("Location: calendar_engineer.php?status=error&month={$redirect_month}&year={$redirect_year}");
+            header("Location: calendar.php?status=error&month={$redirect_month}&year={$redirect_year}");
             exit();
         }
     }
 }
 
-header("Location: calendar_engineer.php?month={$redirect_month}&year={$redirect_year}");
+header("Location: calendar.php?month={$redirect_month}&year={$redirect_year}");
 exit();

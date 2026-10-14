@@ -2,7 +2,7 @@
 session_start();
 require_once '../db/conn.php';
 require_once '../auth_check.php';
-$current_page = 'dashboard_admin';
+$current_page = 'dashboard';
 
 $total_items = $total_qty = $total_value = $total_project_cost = 0;
 $low_stock_count = $out_of_stock_count = $normal_stock_count = 0;
@@ -49,6 +49,7 @@ try {
 
     // 4. ดึงสินค้าใกล้หมดสต็อก (<= 5 ชิ้น)
     $low_stock_products = $pdo->query("SELECT sku, name, category, stock_quantity FROM products WHERE stock_quantity <= 5 ORDER BY stock_quantity ASC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
+
 } catch (PDOException $e) {
     $db_error = $e->getMessage();
 }
@@ -58,7 +59,6 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
 ?>
 <!DOCTYPE html>
 <html lang="th">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -69,45 +69,45 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Prompt', 'sans-serif']
-                    },
-                    colors: {
-                        brandGreen: '#059669'
-                    }
-                }
-            }
-        }
+        tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { brandGreen: '#059669' } } } }
     </script>
 </head>
+<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden relative">
 
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
+    <!-- Sidebar พร้อมคลาสสำหรับซ่อน/แสดง -->
+    <div id="sidebar" class="fixed lg:static inset-y-0 left-0 z-30 transform -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out bg-white border-r border-slate-200 w-64 flex-shrink-0 flex flex-col">
+       <div class="flex-1 overflow-y-auto">
+            <?php if (file_exists('sidebar_admin.php')) include 'sidebar_admin.php'; ?>
+        </div>
+    </div>
 
-    <?php if (file_exists('sidebar_admin.php')) include 'sidebar_admin.php'; ?>
+    <!-- Background Overlay เมื่อเปิด Sidebar บนมือถือ -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-20 hidden lg:hidden"></div>
 
-    <main class="flex-1 flex flex-col h-full overflow-hidden">
+    <main class="flex-1 flex flex-col h-full overflow-hidden w-full">
         <!-- Header -->
-        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-10 shrink-0 shadow-sm">
+        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 shrink-0 shadow-sm z-10">
             <div class="flex items-center gap-3">
-                <span class="relative flex h-3 w-3">
+                <!-- ปุ่มเปิด Sidebar บนมือถือ -->
+                <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+                
+                <!-- <span class="relative flex h-3 w-3">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                </span>
+                </span> -->
                 <div>
-                    <h2 class="text-xl font-bold text-slate-900">ภาพรวมคลังสินค้าและค่าใช้จ่ายโครงการ</h2>
-                    <p class="text-xs text-slate-500">ระบบจัดการและวิเคราะห์ข้อมูลเรียลไทม์</p>
+                    <h2 class="text-base lg:text-xl font-bold text-slate-900 truncate">ภาพรวมคลังสินค้าและค่าใช้จ่ายโครงการ</h2>
                 </div>
             </div>
-            <a href="dashboard_admin.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2">
+            <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2 shrink-0">
                 <i class="fa-solid fa-house text-emerald-600"></i> หน้าหลัก
             </a>
         </header>
 
         <!-- Main Content -->
-        <div class="flex-1 overflow-y-auto p-8 space-y-6">
+        <div class="flex-1 overflow-y-auto p-4 lg:p-8 space-y-6">
             <?php if (isset($db_error)): ?>
                 <div class="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-2xl text-xs">
                     <i class="fa-solid fa-triangle-exclamation me-1"></i> เชื่อมต่อฐานข้อมูลล้มเหลว: <?= htmlspecialchars($db_error) ?>
@@ -165,7 +165,7 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
                 </div>
                 <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
                     <h3 class="text-base font-bold text-slate-900">สัดส่วนสถานะสต็อก</h3>
-                    <div class="h-48 w-full my-2"><canvas id="doughnutChart"></canvas></div>
+                    <div class="h-48 w-full my-2 flex items-center justify-center"><canvas id="doughnutChart"></canvas></div>
                     <div class="grid grid-cols-3 gap-2 text-center text-xs font-semibold pt-2 border-t border-slate-100">
                         <div class="text-emerald-600">ปกติ: <?= $normal_count ?></div>
                         <div class="text-amber-500">ใกล้หมด: <?= $low_count ?></div>
@@ -189,21 +189,19 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
-                                <?php if ($installations_list): foreach ($installations_list as $item):
-                                        $st = $item['status'] ?? 'pending';
-                                        $badge = ($st == 'completed' || $st == 'สำเร็จ') ? '<span class="bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full text-[10px] font-bold">เสร็จสิ้น</span>' : (($st == 'in_progress' || $st == 'กำลังดำเนินการ') ? '<span class="bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full text-[10px] font-bold">ดำเนินการ</span>' :
-                                                '<span class="bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full text-[10px] font-bold">รอดำเนินการ</span>');
+                                <?php if ($installations_list): foreach ($installations_list as $item): 
+                                    $st = $item['status'] ?? 'pending';
+                                    $badge = ($st == 'completed' || $st == 'สำเร็จ') ? '<span class="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap">เสร็จสิ้น</span>' :
+                                            (($st == 'in_progress' || $st == 'กำลังดำเนินการ') ? '<span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap">ดำเนินการ</span>' :
+                                            '<span class="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap">รอดำเนินการ</span>');
                                 ?>
-                                        <tr class="hover:bg-slate-50">
-                                            <td class="py-3 px-3 font-bold text-slate-900"><?= htmlspecialchars($item['name']) ?></td>
-                                            <td class="py-3 px-3 text-right font-semibold text-emerald-600">฿<?= number_format($item['total_cost'], 2) ?></td>
-                                            <td class="py-3 px-3 text-center"><?= $badge ?></td>
-                                        </tr>
-                                    <?php endforeach;
-                                else: ?>
-                                    <tr>
-                                        <td colspan="3" class="text-center py-6 text-slate-400">ไม่มีข้อมูลโครงการ</td>
+                                    <tr class="hover:bg-slate-50">
+                                        <td class="py-3 px-3 font-bold text-slate-900"><?= htmlspecialchars($item['name']) ?></td>
+                                        <td class="py-3 px-3 text-right font-semibold text-emerald-600">฿<?= number_format($item['total_cost'], 2) ?></td>
+                                        <td class="py-3 px-3 text-center"><?= $badge ?></td>
                                     </tr>
+                                <?php endforeach; else: ?>
+                                    <tr><td colspan="3" class="text-center py-6 text-slate-400">ไม่มีข้อมูลโครงการ</td></tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
@@ -224,16 +222,13 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
                             </thead>
                             <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
                                 <?php if ($low_stock_products): foreach ($low_stock_products as $prod): ?>
-                                        <tr class="hover:bg-slate-50">
-                                            <td class="py-3 px-3 font-bold text-slate-900"><?= htmlspecialchars($prod['name']) ?></td>
-                                            <td class="py-3 px-3 text-slate-500"><?= htmlspecialchars($prod['category'] ?? '-') ?></td>
-                                            <td class="py-3 px-3 text-right font-extrabold text-rose-600"><?= number_format($prod['stock_quantity']) ?> ชิ้น</td>
-                                        </tr>
-                                    <?php endforeach;
-                                else: ?>
-                                    <tr>
-                                        <td colspan="3" class="text-center py-6 text-slate-400">ไม่มีสินค้าใกล้หมด</td>
+                                    <tr class="hover:bg-slate-50">
+                                        <td class="py-3 px-3 font-bold text-slate-900"><?= htmlspecialchars($prod['name']) ?></td>
+                                        <td class="py-3 px-3 text-slate-500"><?= htmlspecialchars($prod['category'] ?? '-') ?></td>
+                                        <td class="py-3 px-3 text-right font-extrabold text-rose-600"><?= number_format($prod['stock_quantity']) ?> ชิ้น</td>
                                     </tr>
+                                <?php endforeach; else: ?>
+                                    <tr><td colspan="3" class="text-center py-6 text-slate-400">ไม่มีสินค้าใกล้หมด</td></tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
@@ -244,42 +239,32 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
     </main>
 
     <script>
+        // ควบคุมสำหรับมือถือ (Slide เปิด-ปิด)
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+        }
+
         // Number Counter Animation
         document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.counter').forEach(c => {
-                let target = +c.dataset.target,
-                    count = 0,
-                    step = Math.ceil(target / 20);
+                let target = +c.dataset.target, count = 0, step = Math.ceil(target / 20);
                 if (!target) return c.innerText = 0;
                 let timer = setInterval(() => {
                     count += step;
-                    if (count >= target) {
-                        c.innerText = target.toLocaleString();
-                        clearInterval(timer);
-                    } else {
-                        c.innerText = count.toLocaleString();
-                    }
+                    if (count >= target) { c.innerText = target.toLocaleString(); clearInterval(timer); }
+                    else { c.innerText = count.toLocaleString(); }
                 }, 30);
             });
             document.querySelectorAll('.counter-decimal').forEach(c => {
-                let target = +c.dataset.target,
-                    count = 0,
-                    step = target / 20;
+                let target = +c.dataset.target, count = 0, step = target / 20;
                 if (!target) return c.innerText = '0.00';
                 let timer = setInterval(() => {
                     count += step;
-                    if (count >= target) {
-                        c.innerText = target.toLocaleString('en-US', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                        });
-                        clearInterval(timer);
-                    } else {
-                        c.innerText = count.toLocaleString('en-US', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                        });
-                    }
+                    if (count >= target) { c.innerText = target.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); clearInterval(timer); }
+                    else { c.innerText = count.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
                 }, 30);
             });
         });
@@ -289,30 +274,41 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
             type: 'bar',
             data: {
                 labels: <?= json_encode($chart_labels) ?>,
-                datasets: [{
-                    data: <?= json_encode($chart_data) ?>,
-                    backgroundColor: '#059669',
-                    borderRadius: 8
-                }]
+                datasets: [{ data: <?= json_encode($chart_data) ?>, backgroundColor: '#059669', borderRadius: 8 }]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: {
+                        ticks: {
+                            font: { family: 'Prompt', size: 10 },
+                            maxRotation: 25,
+                            minRotation: 0,
+                            callback: function(value) {
+                                let label = this.getLabelForValue(value);
+                                return label.length > 18 ? label.substring(0, 18) + '...' : label;
+                            }
+                        },
+                        grid: { display: false }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { font: { family: 'Prompt', size: 10 } }
                     }
                 }
             }
         });
 
+        // Doughnut Chart Configuration
         new Chart(document.getElementById('doughnutChart'), {
             type: 'doughnut',
             data: {
                 labels: ['ปกติ', 'ใกล้หมด', 'หมด'],
                 datasets: [{
                     data: [<?= $normal_count ?>, <?= $low_count ?>, <?= $out_count ?>],
-                    backgroundColor: ['#10b981', '#f59e0b', '#f43f5e'],
+                    backgroundColor: ['#059669', '#f59e0b', '#e11d48'],
                     borderWidth: 0
                 }]
             },
@@ -320,14 +316,10 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: {
-                        position: 'bottom'
-                    }
-                },
-                cutout: '70%'
+                    legend: { display: false }
+                }
             }
         });
     </script>
 </body>
-
 </html>

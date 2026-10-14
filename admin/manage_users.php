@@ -32,31 +32,43 @@ $users = $stmt->fetchAll();
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style> body { font-family: 'Prompt', sans-serif; } </style>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen flex">
+<body class="bg-slate-100 text-slate-800 min-h-screen flex overflow-hidden relative">
 
-    <!-- Sidebar ด้านข้าง -->
-    <aside class="w-64 bg-slate-900 text-slate-300 hidden md:block shrink-0 min-h-screen">
-        <?php include 'sidebar_admin.php'; ?>
-    </aside>
+    <!-- Sidebar สำหรับมือถือ (สไลด์เปิด-ปิด) และคอมพิวเตอร์ (แสดงปกติ) -->
+    <div id="sidebarWrapper" class="fixed md:static inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out bg-slate-900 text-slate-300 w-64 shrink-0 flex flex-col shadow-xl md:shadow-none h-full overflow-y-auto">
+        
+        <div class="flex-1 overflow-y-auto">
+            <?php include 'sidebar_admin.php'; ?>
+        </div>
+    </div>
+
+    <!-- Background Overlay เมื่อเปิด Sidebar บนมือถือ -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden"></div>
 
     <!-- เนื้อหาหลัก -->
-    <main class="flex-1 flex flex-col h-screen overflow-hidden bg-slate-100">
+    <main class="flex-1 flex flex-col h-screen overflow-hidden bg-slate-100 w-full">
         
         <!-- ส่วนหัวด้านบน -->
-        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-10 shrink-0 z-10 shadow-sm">
-            <div>
-                <h2 class="text-xl font-bold text-slate-900 tracking-tight">จัดการข้อมูลผู้ใช้งานระบบ</h2>
-                <p class="text-sm text-slate-500 mt-0.5">ระบบจัดการและตรวจสอบสิทธิ์การใช้งาน รวมถึงประวัติการเบิกจ่ายอุปกรณ์โซล่าเซลล์</p>
+        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 shrink-0 z-10 shadow-sm">
+            <div class="flex items-center gap-3">
+                <!-- ปุ่มแฮมเบอร์เกอร์ เปิด/ปิด Sidebar เฉพาะบนมือถือ -->
+                <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+                <div>
+                    <h2 class="text-sm md:text-xl font-bold text-slate-900 tracking-tight truncate">จัดการข้อมูลผู้ใช้งานระบบ</h2>
+                    <p class="text-xs text-slate-500 mt-0.5 hidden sm:block">ระบบจัดการและตรวจสอบสิทธิ์การใช้งาน รวมถึงประวัติการเบิกจ่ายอุปกรณ์โซล่าเซลล์</p>
+                </div>
             </div>
             <div class="flex items-center gap-3">
-                <a href="calendar.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all flex items-center gap-2">
-                    <i class="fa-solid fa-calendar-days text-xs"></i> ไปยังปฏิทินงาน
+                <a href="calendar_admin.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 md:px-4 py-2.5 rounded-2xl text-xs md:text-sm font-semibold transition-all flex items-center gap-2 shrink-0">
+                    <i class="fa-solid fa-calendar-days text-xs"></i> <span class="hidden sm:inline">ไปยังปฏิทินงาน</span>
                 </a>
             </div>
         </header>
 
         <!-- ส่วนเนื้อหาตาราง -->
-        <div class="flex-1 overflow-y-auto p-8">
+        <div class="flex-1 overflow-y-auto p-4 lg:p-8">
             <div class="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm max-w-7xl mx-auto">
                 <div class="p-6 border-b border-slate-100 flex justify-between items-center">
                     <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
@@ -65,46 +77,57 @@ $users = $stmt->fetchAll();
                     <span class="text-xs text-slate-400 font-medium">ทั้งหมด <?php echo count($users); ?> บัญชี</span>
                 </div>
                 
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="border-b border-slate-200 bg-slate-50/70 text-xs text-slate-500 font-semibold">
-                            <th class="p-4">ID</th>
-                            <th class="p-4">ชื่อ-นามสกุล</th>
-                            <th class="p-4">ชื่อผู้ใช้ (Username)</th>
-                            <th class="p-4">สิทธิ์การใช้งาน</th>
-                            <th class="p-4 text-center">ประวัติการเบิกจ่าย</th>
-                            <th class="p-4 text-center">จัดการ</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 text-xs">
-                        <?php foreach ($users as $u): ?>
-                        <tr class="hover:bg-slate-50/80 transition">
-                            <td class="p-4 font-mono text-slate-400">#<?php echo $u['id']; ?></td>
-                            <td class="p-4 font-bold text-slate-800"><?php echo htmlspecialchars($u['name']); ?></td>
-                            <td class="p-4 text-slate-600"><?php echo htmlspecialchars($u['username']); ?></td>
-                            <td class="p-4">
-                                <span class="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200">
-                                    <?php echo htmlspecialchars($u['type_name'] ?? 'User'); ?>
-                                </span>
-                            </td>
-                            <td class="p-4 text-center">
-                                <a href="user_history.php?id=<?php echo $u['id']; ?>" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl font-semibold transition border border-blue-200 inline-flex items-center gap-1">
-                                    <i class="fas fa-box-open"></i> ดูรายการเบิกจ่าย
-                                </a>
-                            </td>
-                            <td class="p-4 text-center">
-                                <a href="edit_user.php?id=<?php echo $u['id']; ?>" class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl font-semibold transition border border-amber-200 inline-flex items-center gap-1">
-                                    <i class="fas fa-edit"></i> แก้ไข
-                                </a>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse min-w-[700px]">
+                        <thead>
+                            <tr class="border-b border-slate-200 bg-slate-50/70 text-xs text-slate-500 font-semibold">
+                                <!-- <th class="p-4">ID</th> -->
+                                <th class="p-4">ชื่อ-นามสกุล</th>
+                                <th class="p-4">ชื่อผู้ใช้ (Username)</th>
+                                <th class="p-4">สิทธิ์การใช้งาน</th>
+                                <th class="p-4 text-center">ประวัติการเบิกจ่าย</th>
+                                <th class="p-4 text-center">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-xs">
+                            <?php foreach ($users as $u): ?>
+                            <tr class="hover:bg-slate-50/80 transition">
+                                <!-- <td class="p-4 font-mono text-slate-400">#<?php echo $u['id']; ?></td> -->
+                                <td class="p-4 font-bold text-slate-800"><?php echo htmlspecialchars($u['name']); ?></td>
+                                <td class="p-4 text-slate-600"><?php echo htmlspecialchars($u['username']); ?></td>
+                                <td class="p-4">
+                                    <span class="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200 whitespace-nowrap">
+                                        <?php echo htmlspecialchars($u['type_name'] ?? 'User'); ?>
+                                    </span>
+                                </td>
+                                <td class="p-4 text-center">
+                                    <a href="user_history.php?id=<?php echo $u['id']; ?>" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl font-semibold transition border border-blue-200 inline-flex items-center gap-1">
+                                        <i class="fas fa-box-open"></i> ดูรายการเบิกจ่าย
+                                    </a>
+                                </td>
+                                <td class="p-4 text-center">
+                                    <a href="edit_user.php?id=<?php echo $u['id']; ?>" class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl font-semibold transition border border-amber-200 inline-flex items-center gap-1">
+                                        <i class="fas fa-edit"></i> แก้ไข
+                                    </a>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
     </main>
 
+    <script>
+        // ฟังก์ชันควบคุมเปิด/ปิด Sidebar บนมือถือ
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebarWrapper');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+        }
+    </script>
 </body>
 </html>

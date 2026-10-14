@@ -13,7 +13,7 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-$current_page = 'expenses';
+$current_page = 'expenses_summary';
 
 // รับค่าโครงการที่ถูกเลือกจาก Dropdown (ถ้ามี)
 $selected_installation_id = isset($_GET['installation_id']) && $_GET['installation_id'] !== '' ? intval($_GET['installation_id']) : 'all';
@@ -50,7 +50,7 @@ try {
     foreach ($projects as $proj) {
         $proj_id = $proj['id'];
 
-        // 1.1 รายการเบิกออก (type = 'out') - ดึงราคา unit_cost ตามประวัติที่บันทึกจริง ณ วันที่เบิก
+        // 1.1 รายการเบิกออก (type = 'out')
         $stmt_out = $pdo->prepare("
             SELECT s.*, p.name AS product_name, p.sku, s.unit_cost AS cost_price, u.name AS user_name
             FROM stock_transactions s
@@ -84,7 +84,6 @@ try {
             $in_cost += ($item['quantity'] * floatval($item['cost_price']));
         }
 
-        // คำนวณมูลค่าอุปกรณ์สุทธิที่ใช้ไปจริง (เบิกออก - รับเข้า)
         $net_material_cost = $out_cost - $in_cost;
 
         // 1.3 รายการค่าใช้จ่ายอื่นๆ (Expenses)
@@ -101,7 +100,6 @@ try {
 
         $grand_total = $net_material_cost + $other_cost;
 
-        // รวมยอดระดับภาพรวม
         $total_all_material_cost  += $net_material_cost;
         $total_all_other_expenses += $other_cost;
         $total_all_expenses       += $grand_total;
@@ -166,40 +164,52 @@ try {
         }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
+<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden relative">
 
-    <!-- Sidebar ด้านข้าง -->
-    <div id="sidebarWrapper" class="h-full shrink-0">
-        <?php 
-        if (file_exists('sidebar_admin.php')) {
-            include 'sidebar_admin.php'; 
-        } elseif (file_exists('sidebar.php')) {
-            include 'sidebar.php';
-        }
-        ?>
+    <!-- Sidebar: ซ่อนอัตโนมัติบนมือถือ (-translate-x-full) และแสดงปกติบนหน้าจอคอมพิวเตอร์ (lg:translate-x-0) -->
+    <div id="sidebarWrapper" class="fixed lg:static inset-y-0 left-0 z-30 transform -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out bg-white border-r border-slate-200 w-64 flex-shrink-0 flex flex-col shadow-xl lg:shadow-none">
+        
+        <div class="flex-1 overflow-y-auto">
+            <?php 
+            if (file_exists('sidebar_admin.php')) {
+                include 'sidebar_admin.php'; 
+            } elseif (file_exists('sidebar.php')) {
+                include 'sidebar.php';
+            }
+            ?>
+        </div>
     </div>
 
+    <!-- Background Overlay เฉพาะตอนเปิด Sidebar บนมือถือ -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-20 hidden lg:hidden"></div>
+
     <!-- Main Content Area -->
-    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100">
+    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100 w-full">
         
         <!-- Header -->
-        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-10 shrink-0 z-10 shadow-sm">
-            <div>
-                <h2 class="text-xl font-bold text-slate-900 tracking-tight">รายงานค่าใช้จ่ายและส่วนต่างการเบิก/รับเข้า</h2>
-                <p class="text-sm text-slate-500 mt-0.5">เลือกโครงการเพื่อตรวจสอบและออกรายงานเฉพาะโครงการได้ทันที</p>
-            </div>
+        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-10 shrink-0 z-10 shadow-sm">
             <div class="flex items-center gap-3">
-                <button onclick="openPrintModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all">
-                    <i class="fa-solid fa-file-pdf"></i> ออกรายงาน PDF
+                <!-- ปุ่มกดเปิด Sidebar (แสดงเฉพาะบนมือถือ/แท็บเล็ต โดยซ่อนบนคอมพิวเตอร์ด้วย lg:hidden) -->
+                <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
+                    <i class="fa-solid fa-bars text-lg"></i>
                 </button>
-                <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2">
-                    <i class="fa-solid fa-house text-emerald-600"></i> หน้าหลัก
+                <div>
+                    <h2 class="text-sm md:text-xl font-bold text-slate-900 tracking-tight">รายงานค่าใช้จ่ายโครงการ</h2>
+                    <!-- <p class="text-xs text-slate-500 hidden sm:block">เลือกโครงการเพื่อตรวจสอบและออกรายงานเฉพาะโครงการได้ทันที</p> -->
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="openPrintModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition">
+                    <i class="fa-solid fa-file-pdf"></i> <span class="hidden sm:inline">ออกรายงาน PDF</span>
+                </button>
+                <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-house text-emerald-600"></i> <span class="hidden sm:inline">หน้าหลัก</span>
                 </a>
             </div>
         </header>
 
         <!-- Scroll Content Area -->
-        <div class="flex-1 overflow-y-auto p-8 space-y-6">
+        <div class="flex-1 overflow-y-auto p-4 lg:p-8 space-y-6">
             
             <?php if (isset($db_error)): ?>
                 <div class="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-2xl text-sm">
@@ -235,7 +245,7 @@ try {
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div class="bg-white p-6 rounded-3xl border border-slate-200/85 shadow-sm flex items-center justify-between">
                     <div class="space-y-1">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">มูลค่าอุปกรณ์สุทธิ (เบิก - รับเข้า)</p>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">มูลค่าอุปกรณ์สุทธิ</p>
                         <h3 class="text-2xl font-extrabold text-emerald-600">฿<?= number_format($total_all_material_cost, 2) ?></h3>
                     </div>
                     <div class="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shadow-inner">
@@ -269,13 +279,13 @@ try {
                 <div class="flex items-center justify-between">
                     <div>
                         <h3 class="text-base font-bold text-slate-900"><i class="fa-solid fa-diagram-project text-brandGreen me-2"></i> รายละเอียดรายโครงการ</h3>
-                        <p class="text-xs text-slate-500">คลิกแถบโครงการเพื่อขยายดูรายการเบิกออก รับเข้า และค่าใช้จ่ายย่อยพร้อมสลิปหลักฐาน</p>
+                        <p class="text-xs text-slate-500">คลิกแถบโครงการเพื่อขยายดูรายการเบิกออก รับเข้า และค่าใช้จ่ายย่อย</p>
                     </div>
                     <span class="text-xs text-slate-400 font-medium">แสดงผล <?= count($project_summaries) ?> โครงการ</span>
                 </div>
 
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
+                    <table class="w-full text-left border-collapse min-w-[700px]">
                         <thead>
                             <tr class="border-b border-slate-200 bg-slate-50/70 text-xs font-bold text-slate-400 uppercase tracking-wider">
                                 <th class="py-4 px-4"># / โครงการ</th>
@@ -311,9 +321,6 @@ try {
                                         <td class="py-4 px-4 text-center"><?= $badge ?></td>
                                         <td class="py-4 px-4 text-right">
                                             <div class="font-semibold text-emerald-600">฿<?= number_format($p['net_material_cost'], 2) ?></div>
-                                            <?php if ($p['in_cost'] > 0): ?>
-                                                <div class="text-[9px] text-slate-400">(เบิก ฿<?= number_format($p['out_cost']) ?> หักรับเข้า ฿<?= number_format($p['in_cost']) ?>)</div>
-                                            <?php endif; ?>
                                         </td>
                                         <td class="py-4 px-4 text-right font-semibold text-amber-600">฿<?= number_format($p['other_cost'], 2) ?></td>
                                         <td class="py-4 px-4 text-right font-extrabold text-slate-900 text-sm">฿<?= number_format($p['grand_total'], 2) ?></td>
@@ -343,7 +350,7 @@ try {
                                                                 <div class="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl text-[11px] border border-slate-100">
                                                                     <div>
                                                                         <div class="font-bold text-slate-800"><?= htmlspecialchars($item['product_name']) ?></div>
-                                                                        <div class="text-[10px] text-slate-400">ราคา/หน่วย: ฿<?= number_format($item['cost_price'], 2) ?> | วันที่: <?= date('d/m/Y', strtotime($item['created_at'])) ?></div>
+                                                                        <div class="text-[10px] text-slate-400">ราคา/หน่วย: ฿<?= number_format($item['cost_price'], 2) ?></div>
                                                                     </div>
                                                                     <div class="text-right">
                                                                         <div class="font-bold text-slate-900"><?= number_format($item['quantity']) ?> ชิ้น</div>
@@ -371,7 +378,7 @@ try {
                                                                 <div class="flex items-center justify-between bg-purple-50/50 p-2.5 rounded-xl text-[11px] border border-purple-100">
                                                                     <div>
                                                                         <div class="font-bold text-slate-800"><?= htmlspecialchars($item['product_name']) ?></div>
-                                                                        <div class="text-[10px] text-slate-400">ราคา/หน่วย: ฿<?= number_format($item['cost_price'], 2) ?> | อ้างอิง: <?= htmlspecialchars($item['reference_no'] ?: '-') ?></div>
+                                                                        <div class="text-[10px] text-slate-400">ราคา/หน่วย: ฿<?= number_format($item['cost_price'], 2) ?></div>
                                                                     </div>
                                                                     <div class="text-right">
                                                                         <div class="font-bold text-slate-900"><?= number_format($item['quantity']) ?> ชิ้น</div>
@@ -475,101 +482,84 @@ try {
                     </div>
                     <div class="text-right">
                         <span class="inline-block px-3 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded text-xs font-bold uppercase mb-1">OFFICIAL REPORT</span>
-                        <p class="text-xs font-semibold text-slate-600">วันที่พิมพ์: <?= date('d/m/Y') ?></p>
+                        <p class="text-xs font-semibold text-slate-500">วันที่พิมพ์: <?= date('d/m/Y H:i') ?></p>
                     </div>
                 </div>
 
-                <!-- ตารางสรุปในรายงานพิมพ์ -->
-                <div class="space-y-4">
-                    <table class="w-full border-collapse border border-slate-400 text-sm">
-                        <thead>
-                            <tr class="bg-slate-100 text-slate-800">
-                                <th class="border border-slate-400 p-2 text-center">ลำดับ</th>
-                                <th class="border border-slate-400 p-2 text-left">ชื่อโครงการ</th>
-                                <th class="border border-slate-400 p-2 text-right">อุปกรณ์สุทธิ (บาท)</th>
-                                <th class="border border-slate-400 p-2 text-right">ค่าใช้จ่ายอื่น (บาท)</th>
-                                <th class="border border-slate-400 p-2 text-right">รวมสุทธิ (บาท)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (!empty($project_summaries)): ?>
-                                <?php $no = 1; foreach ($project_summaries as $ps): ?>
-                                    <tr>
-                                        <td class="border border-slate-400 p-2 text-center"><?= $no++ ?></td>
-                                        <td class="border border-slate-400 p-2"><?= htmlspecialchars($ps['project_name']) ?></td>
-                                        <td class="border border-slate-400 p-2 text-right"><?= number_format($ps['net_material_cost'], 2) ?></td>
-                                        <td class="border border-slate-400 p-2 text-right"><?= number_format($ps['other_cost'], 2) ?></td>
-                                        <td class="border border-slate-400 p-2 text-right font-bold"><?= number_format($ps['grand_total'], 2) ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <tr>
-                                    <td colspan="5" class="border border-slate-400 p-4 text-center text-slate-500">ไม่พบข้อมูลในรายงาน</td>
-                                </tr>
-                            <?php endif; ?>
-                        </tbody>
-                        <tfoot>
-                            <tr class="bg-slate-50 font-bold">
-                                <td colspan="2" class="border border-slate-400 p-2 text-right">รวมทั้งสิ้น:</td>
-                                <td class="border border-slate-400 p-2 text-right text-emerald-700">฿<?= number_format($total_all_material_cost, 2) ?></td>
-                                <td class="border border-slate-400 p-2 text-right text-amber-700">฿<?= number_format($total_all_other_expenses, 2) ?></td>
-                                <td class="border border-slate-400 p-2 text-right text-rose-700">฿<?= number_format($total_all_expenses, 2) ?></td>
-                            </tr>
-                        </tfoot>
-                    </table>
+                <div class="grid grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm">
+                    <div><strong>มูลค่าอุปกรณ์สุทธิรวม:</strong> ฿<?= number_format($total_all_material_cost, 2) ?></div>
+                    <div><strong>ค่าใช้จ่ายอื่นๆ รวม:</strong> ฿<?= number_format($total_all_other_expenses, 2) ?></div>
+                    <div><strong>ค่าใช้จ่ายสุทธิทั้งสิ้น:</strong> ฿<?= number_format($total_all_expenses, 2) ?></div>
                 </div>
 
-                <div class="pt-10 flex justify-between text-sm">
-                    <div class="text-center space-y-12">
-                        <p>ลงชื่อ......................................................ผู้จัดทำ</p>
-                        <p>(......................................................)</p>
-                    </div>
-                    <div class="text-center space-y-12">
-                        <p>ลงชื่อ......................................................ผู้อนุมัติ</p>
-                        <p>(......................................................)</p>
-                    </div>
-                </div>
+                <table class="w-full border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-slate-800 text-white text-left">
+                            <th class="p-2.5 border border-slate-700">ชื่อโครงการ</th>
+                            <th class="p-2.5 border border-slate-700 text-center">สถานะ</th>
+                            <th class="p-2.5 border border-slate-700 text-right">อุปกรณ์สุทธิ (บาท)</th>
+                            <th class="p-2.5 border border-slate-700 text-right">ค่าใช้จ่ายอื่น (บาท)</th>
+                            <th class="p-2.5 border border-slate-700 text-right">รวมสุทธิ (บาท)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($project_summaries as $p): ?>
+                            <tr>
+                                <td class="p-2.5 border border-slate-200 font-bold"><?= htmlspecialchars($p['project_name']) ?></td>
+                                <td class="p-2.5 border border-slate-200 text-center"><?= htmlspecialchars($p['project_status']) ?></td>
+                                <td class="p-2.5 border border-slate-200 text-right"><?= number_format($p['net_material_cost'], 2) ?></td>
+                                <td class="p-2.5 border border-slate-200 text-right"><?= number_format($p['other_cost'], 2) ?></td>
+                                <td class="p-2.5 border border-slate-200 text-right font-bold"><?= number_format($p['grand_total'], 2) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 
-    <!-- JavaScript ควบคุมการเปิดปิดรายละเอียด / Modal -->
+    <!-- Script ควบคุมเปิด/ปิด Sidebar เฉพาะโหมดมือถือ -->
     <script>
-        function toggleDetails(projId) {
-            let detailRow = document.getElementById('detail-' + projId);
-            let icon = document.getElementById('icon-' + projId);
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebarWrapper');
+            const overlay = document.getElementById('sidebar-overlay');
+            
+            // ควบคุมการสไลด์เปิด/ปิดเฉพาะบนมือถือ
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+        }
+
+        function toggleDetails(rowId) {
+            const detailRow = document.getElementById('detail-' + rowId);
+            const icon = document.getElementById('icon-' + rowId);
             if (detailRow.classList.contains('hidden')) {
                 detailRow.classList.remove('hidden');
-                icon.classList.add('rotate-90');
+                icon.style.transform = 'rotate(90deg)';
             } else {
                 detailRow.classList.add('hidden');
-                icon.classList.remove('rotate-90');
+                icon.style.transform = 'rotate(0deg)';
             }
         }
 
         function openImageModal(imgSrc) {
             document.getElementById('modalReceiptImg').src = imgSrc;
-            let modal = document.getElementById('imageModal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+            document.getElementById('imageModal').classList.remove('hidden');
+            document.getElementById('imageModal').classList.add('flex');
         }
 
         function closeImageModal() {
-            let modal = document.getElementById('imageModal');
-            modal.classList.remove('flex');
-            modal.classList.add('hidden');
+            document.getElementById('imageModal').classList.remove('flex');
+            document.getElementById('imageModal').classList.add('hidden');
         }
 
         function openPrintModal() {
-            let modal = document.getElementById('printReportModal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+            document.getElementById('printReportModal').classList.remove('hidden');
+            document.getElementById('printReportModal').classList.add('flex');
         }
 
         function closePrintModal() {
-            let modal = document.getElementById('printReportModal');
-            modal.classList.remove('flex');
-            modal.classList.add('hidden');
+            document.getElementById('printReportModal').classList.remove('flex');
+            document.getElementById('printReportModal').classList.add('hidden');
         }
     </script>
 </body>

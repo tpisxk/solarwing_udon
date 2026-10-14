@@ -7,7 +7,7 @@ header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
 
 require_once '../db/conn.php';
 require_once '../auth_check.php';
-$current_page = 'project_list_admin'; 
+$current_page = 'project_list.php'; 
 
 // ดึงข้อมูลโครงการ พร้อมคำนวณต้นทุนอุปกรณ์สุทธิจาก stock_transactions ที่ผูกกับ installation_id
 try {
@@ -57,34 +57,49 @@ try {
         ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
+<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden relative">
 
-    <!-- Sidebar -->
-    <?php include 'sidebar_admin.php'; ?>
+    <!-- Sidebar พร้อมคลาสสำหรับซ่อน/แสดง -->
+    <div id="sidebar" class="fixed lg:static inset-y-0 left-0 z-30 transform -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out bg-white border-r border-slate-200 w-64 flex-shrink-0 flex flex-col">
+        
+        <div class="flex-1 overflow-y-auto">
+            <?php include 'sidebar_admin.php'; ?>
+        </div>
+    </div>
+
+    <!-- Background Overlay เมื่อเปิด Sidebar บนมือถือ -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-20 hidden lg:hidden"></div>
 
     <!-- Main Content -->
-    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100">
+    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100 w-full">
         
         <!-- Header Bar -->
-        <header class="h-20 bg-white border-b border-slate-200/80 flex items-center justify-between px-10 shrink-0 z-10 shadow-xs">
-            <div>
-                <h2 class="text-xl font-bold text-slate-900 tracking-tight">รายงานรายการโครงการและต้นทุนอุปกรณ์สุทธิ</h2>
-                <p class="text-xs text-slate-500 mt-0.5">ตรวจสอบสรุปข้อมูลหน้างาน ขนาดติดตั้ง พิกัดแผนที่ และมูลค่าต้นทุนอุปกรณ์แต่ละโครงการ</p>
-            </div>
+        <header class="h-20 bg-white border-b border-slate-200/80 flex items-center justify-between px-6 lg:px-10 shrink-0 z-10 shadow-xs">
             <div class="flex items-center gap-3">
-                <a href="locations.php" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2 border border-emerald-200/60 transition-all">
-                    <i class="fa-solid fa-map-marker-alt"></i> กลับไปหน้าจัดการสถานที่
+                <!-- ปุ่มเปิด Sidebar บนมือถือ -->
+                <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+                
+                <div>
+                    <h2 class="text-base lg:text-xl font-bold text-slate-900 tracking-tight">รายงานรายการโครงการและต้นทุนอุปกรณ์สุทธิ</h2>
+                    <!-- <p class="text-xs text-slate-500 mt-0.5 hidden sm:block">ตรวจสอบสรุปข้อมูลหน้างาน ขนาดติดตั้ง พิกัดแผนที่ และมูลค่าต้นทุนอุปกรณ์แต่ละโครงการ</p> -->
+                </div>
+            </div>
+            <div class="flex items-center gap-2 lg:gap-3 shrink-0">
+                <a href="locations_admin.php" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 lg:px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2 border border-emerald-200/60 transition-all">
+                    <i class="fa-solid fa-map-marker-alt"></i> <span class="hidden sm:inline">จัดการสถานที่</span>
                 </a>
-                <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2">
-                    <i class="fa-solid fa-house text-emerald-600"></i> หน้าหลัก
+                <a href="dashboard_admin.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 lg:px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2">
+                    <i class="fa-solid fa-house text-emerald-600"></i> <span class="hidden sm:inline">หน้าหลัก</span>
                 </a>
             </div>
         </header>
 
         <!-- Main Body -->
-        <div class="flex-1 overflow-y-auto p-10 space-y-6">
+        <div class="flex-1 overflow-y-auto p-4 lg:p-10 space-y-6">
             
-            <div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden p-6 space-y-4">
+            <div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden p-4 lg:p-6 space-y-4">
                 <div class="flex items-center justify-between px-2">
                     <h3 class="text-base font-bold text-slate-900">ตารางสรุปโครงการและต้นทุนทั้งหมด</h3>
                     <span class="text-xs text-slate-400 font-medium">จำนวนทั้งหมด: <?= count($locationsList) ?> โครงการ</span>
@@ -161,5 +176,21 @@ try {
         </div>
     </main>
 
+    <script>
+        // ควบคุมสำหรับมือถือ (Slide เปิด-ปิด)
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+        }
+
+        // ควบคุมสำหรับคอมพิวเตอร์ (ซ่อนแถบเมนูให้พับเก็บซ้ายสุด)
+        function toggleDesktopSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('lg:-ml-64');
+            sidebar.classList.toggle('lg:opacity-0');
+        }
+    </script>
 </body>
 </html>

@@ -72,33 +72,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </script>
     <style>::-webkit-scrollbar { width: 6px; height: 6px; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }</style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
+<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden relative">
 
-    <?php 
-    if (file_exists('sidebar_admin.php')) {
-        include 'sidebar_admin.php'; 
-    } elseif (file_exists('sidebar.php')) {
-        include 'sidebar.php';
-    }
-    ?>
+    <!-- Sidebar สำหรับมือถือ (สไลด์เปิด-ปิด) และคอมพิวเตอร์ (แสดงปกติ) -->
+    <div id="sidebarWrapper" class="fixed md:static inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out bg-white border-r border-slate-200 w-64 shrink-0 flex flex-col shadow-xl md:shadow-none h-full overflow-y-auto">
+        
+        <div class="flex-1 overflow-y-auto">
+            <?php 
+            if (file_exists('sidebar_admin.php')) {
+                include 'sidebar_admin.php'; 
+            } elseif (file_exists('sidebar.php')) {
+                include 'sidebar.php';
+            }
+            ?>
+        </div>
+    </div>
 
-    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100">
+    <!-- Background Overlay เมื่อเปิด Sidebar บนมือถือ -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden"></div>
+
+    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100 w-full">
         
         <!-- Header -->
-        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-10 shrink-0 z-10 shadow-sm">
-            <div>
-                <h2 class="text-xl font-bold text-slate-900 tracking-tight">เพิ่มผู้ใช้งานใหม่</h2>
-                <p class="text-sm text-slate-500 mt-0.5">สร้างบัญชีผู้ใช้งานใหม่สำหรับเข้าใช้งานระบบจัดการสต็อก</p>
+        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 shrink-0 z-10 shadow-sm">
+            <div class="flex items-center gap-3">
+                <!-- ปุ่มแฮมเบอร์เกอร์ เปิด/ปิด Sidebar บนมือถือ -->
+                <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+                <div>
+                    <h2 class="text-sm md:text-xl font-bold text-slate-900 tracking-tight truncate">เพิ่มผู้ใช้งานใหม่</h2>
+                    <p class="text-xs text-slate-500 mt-0.5 hidden sm:block">สร้างบัญชีผู้ใช้งานใหม่สำหรับเข้าใช้งานระบบจัดการสต็อก</p>
+                </div>
             </div>
             <div class="flex items-center gap-3">
-                <a href="manage_users.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all flex items-center gap-2">
-                    <i class="fa-solid fa-arrow-left text-xs"></i> กลับหน้ารายการผู้ใช้
+                <a href="manage_users.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 md:px-4 py-2.5 rounded-2xl text-xs md:text-sm font-semibold transition-all flex items-center gap-2 shrink-0">
+                    <i class="fa-solid fa-arrow-left text-xs"></i> <span class="hidden sm:inline">กลับหน้ารายการผู้ใช้</span>
                 </a>
             </div>
         </header>
 
         <!-- Main Content Area -->
-        <div class="flex-1 overflow-y-auto p-8 w-full">
+        <div class="flex-1 overflow-y-auto p-4 lg:p-8 w-full">
             <div class="max-w-3xl mx-auto space-y-6">
             
                 <!-- แจ้งเตือนข้อความ Success / Error -->
@@ -110,9 +125,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php endif; ?>
 
                 <!-- ฟอร์มกรอกข้อมูล -->
-                <div class="bg-white rounded-3xl border border-slate-200/85 shadow-sm p-8">
+                <div class="bg-white rounded-3xl border border-slate-200/85 shadow-sm p-6 lg:p-8">
                     <div class="flex items-center gap-3 pb-6 border-b border-slate-100 mb-6">
-                        <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-brandGreen flex items-center justify-center text-lg shadow-inner">
+                        <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-brandGreen flex items-center justify-center text-lg shadow-inner shrink-0">
                             <i class="fa-solid fa-user-plus"></i>
                         </div>
                         <div>
@@ -228,11 +243,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
 
                         <!-- ปุ่มดำเนินการ -->
-                        <div class="pt-6 border-t border-slate-100 flex items-center justify-end gap-3">
-                            <button type="reset" class="px-6 py-2.5 rounded-2xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-100 transition-all">
+                        <div class="pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-end gap-3">
+                            <button type="reset" class="w-full sm:w-auto px-6 py-2.5 rounded-2xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-100 transition-all text-center">
                                 ล้างข้อมูล
                             </button>
-                            <button type="submit" class="bg-brandGreen hover:bg-emerald-700 text-white px-6 py-2.5 rounded-2xl text-sm font-semibold shadow-sm transition-all flex items-center gap-2">
+                            <button type="submit" class="w-full sm:w-auto bg-brandGreen hover:bg-emerald-700 text-white px-6 py-2.5 rounded-2xl text-sm font-semibold shadow-sm transition-all flex items-center justify-center gap-2">
                                 <i class="fa-solid fa-floppy-disk text-xs"></i> บันทึกผู้ใช้งาน
                             </button>
                         </div>
@@ -243,5 +258,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </main>
 
+    <script>
+        // ฟังก์ชันควบคุมเปิด/ปิด Sidebar บนมือถือ
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebarWrapper');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+        }
+    </script>
 </body>
 </html>

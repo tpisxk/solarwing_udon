@@ -80,37 +80,51 @@ $roles = $pdo->query("SELECT * FROM user_type")->fetchAll();
     
     <style> body { font-family: 'Prompt', sans-serif; } </style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
+<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden relative">
+    
+    <!-- Sidebar สำหรับมือถือ (สไลด์เปิด-ปิด) และคอมพิวเตอร์ (แสดงปกติ) -->
+    <div id="sidebarWrapper" class="fixed md:static inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out bg-slate-900 text-slate-300 w-64 shrink-0 flex flex-col shadow-xl md:shadow-none h-full overflow-y-auto">
+        
+        <div class="flex-1 overflow-y-auto">
+            <?php 
+            if (file_exists('sidebar_admin.php')) {
+                include 'sidebar_admin.php'; 
+            } elseif (file_exists('sidebar.php')) {
+                include 'sidebar.php';
+            }
+            ?>
+        </div>
+    </div>
 
-    <!-- ดึง Sidebar ด้านข้าง -->
-    <?php 
-    if (file_exists('sidebar_admin.php')) {
-        include 'sidebar_admin.php'; 
-    } elseif (file_exists('sidebar.php')) {
-        include 'sidebar.php';
-    }
-    ?>
+    <!-- Background Overlay เมื่อเปิด Sidebar บนมือถือ -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden"></div>
 
     <!-- Main Content Area -->
-    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100">
+    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100 w-full">
         
         <!-- Header ด้านบน -->
-        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-10 shrink-0 z-10 shadow-sm">
-            <div>
-                <h2 class="text-xl font-bold text-slate-900 tracking-tight">แก้ไขข้อมูลผู้ใช้งาน</h2>
-                <p class="text-sm text-slate-500 mt-0.5">ปรับเปลี่ยนรายละเอียด สิทธิ์การใช้งาน และรหัสผ่านของผู้ใช้</p>
+        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 shrink-0 z-10 shadow-sm">
+            <div class="flex items-center gap-3">
+                <!-- ปุ่มแฮมเบอร์เกอร์ เปิด/ปิด Sidebar บนมือถือ -->
+                <button onclick="toggleSidebar()" class="md:hidden text-slate-600 hover:text-emerald-600 p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition focus:outline-none shrink-0">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+                <div>
+                    <h2 class="text-sm md:text-xl font-bold text-slate-900 tracking-tight truncate">แก้ไขข้อมูลผู้ใช้งาน</h2>
+                    <p class="text-xs text-slate-500 mt-0.5 hidden sm:block">ปรับเปลี่ยนรายละเอียด สิทธิ์การใช้งาน และรหัสผ่านของผู้ใช้</p>
+                </div>
             </div>
             <div class="flex items-center gap-3">
-                <a href="manage_users.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all flex items-center gap-2">
-                    <i class="fa-solid fa-arrow-left text-xs"></i> ย้อนกลับ
+                <a href="manage_users.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 md:px-4 py-2.5 rounded-2xl text-xs md:text-sm font-semibold transition-all flex items-center gap-2 shrink-0">
+                    <i class="fa-solid fa-arrow-left text-xs"></i> <span class="hidden sm:inline">ย้อนกลับ</span>
                 </a>
             </div>
         </header>
 
         <!-- Content Area จัดวางฟอร์มให้อยู่กึ่งกลางหน้าจอ -->
-        <div class="flex-1 overflow-y-auto p-8 w-full flex items-center justify-center">
+        <div class="flex-1 overflow-y-auto p-4 lg:p-8 w-full flex items-center justify-center">
             
-            <div class="max-w-md w-full bg-white rounded-3xl border border-slate-200/85 shadow-sm p-8 space-y-6">
+            <div class="max-w-md w-full bg-white rounded-3xl border border-slate-200/85 shadow-sm p-6 lg:p-8 space-y-6">
                 
                 <!-- หัวข้อการ์ด -->
                 <div class="text-center space-y-1">
@@ -182,5 +196,14 @@ $roles = $pdo->query("SELECT * FROM user_type")->fetchAll();
         </div>
     </main>
 
+    <script>
+        // ฟังก์ชันควบคุมเปิด/ปิด Sidebar บนมือถือ
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebarWrapper');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+        }
+    </script>
 </body>
 </html>

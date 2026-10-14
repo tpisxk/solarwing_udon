@@ -71,7 +71,7 @@ try {
                 <i class="fas fa-calendar-alt w-5 text-center text-sm"></i> Calendar (ปฏิทินงาน)
             </a>
             <a href="user_requisitions.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'user_requisitions') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
-                <i class="fas fa-map-marker-alt w-5 text-center text-sm"></i> ใบเบิก  (พี่กุ้งตัดตรงนี้นะ)
+                <i class="fas fa-map-marker-alt w-5 text-center text-sm"></i> ใบเบิกสินค้า
             </a>
             <a href="inventory.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'inventory') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
                 <i class="fas fa-boxes w-5 text-center text-sm"></i> สต็อกคงเหลือ
@@ -97,6 +97,10 @@ try {
 
             <a href="expenses_summary.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'expenses_summary') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
                 <i class="fas fa-file-invoice w-5 text-center text-sm"></i> สรุปค่าใช้จ่าย
+            </a>
+
+            <a href="view_installation.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'view_installation') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+                <i class="fas fa-file-invoice w-5 text-center text-sm"></i> PROJECT DESIGN
             </a>
 
             <div class="pt-3 pb-2">

@@ -11,75 +11,113 @@ require_once '../auth_check.php';
 $current_page = 'add_installation_admin';
 $message = '';
 $message_type = '';
+$swal_success = false;
 
-// บันทึกข้อมูล Kick Off Form ลงฐานข้อมูล installations
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $project_sale_no      = trim($_POST['project_sale_no'] ?? '');
-    $lat_long             = trim($_POST['lat_long'] ?? '');
     $project_no           = trim($_POST['project_no'] ?? '');
-    $installation_address = trim($_POST['installation_address'] ?? '');
     $name                 = trim($_POST['name'] ?? '');
-    $billing_address      = trim($_POST['billing_address'] ?? '');
     $customer_name        = trim($_POST['customer_name'] ?? '');
-    $sales_rep            = trim($_POST['sales_rep'] ?? '');
     $customer_phone       = trim($_POST['customer_phone'] ?? '');
+    $contract_person      = trim($_POST['contract_person'] ?? '');
+    $sales_rep            = trim($_POST['sales_rep'] ?? '');
+    $lat_long             = trim($_POST['lat_long'] ?? '');
     $system_size          = trim($_POST['system_size'] ?? '');
+    $total_price          = floatval(str_replace(',', '', $_POST['total_price'] ?? '0'));
+    $billing_address      = trim($_POST['billing_address'] ?? '');
+    $installation_address = trim($_POST['installation_address'] ?? '');
     
-    // จัดการข้อมูลแยกงวดชำระเงิน
+    // ข้อมูลเชิงเทคนิคตามแบบฟอร์ม
+    $meter_no             = trim($_POST['meter_no'] ?? '');
+    $meter_type           = trim($_POST['meter_type'] ?? '');
+    $system_type          = trim($_POST['system_type'] ?? '');
+    $mea_pea_connection   = trim($_POST['mea_pea_connection'] ?? '');
+    $warranty             = trim($_POST['warranty'] ?? '');
+    $om                   = trim($_POST['om'] ?? '');
+    $roof_change          = trim($_POST['roof_change'] ?? '');
+    $structure_addition   = trim($_POST['structure_addition'] ?? '');
+    
+    $panel_spec           = trim($_POST['panel_spec'] ?? '');
+    $inverter_spec        = trim($_POST['inverter_spec'] ?? '');
+    $mounting             = trim($_POST['mounting'] ?? '');
+    $connection_points    = trim($_POST['connection_points'] ?? '');
+    $walk_way             = trim($_POST['walk_way'] ?? '');
+    $installation_req     = trim($_POST['installation_req'] ?? '');
+    $work_safety_req      = trim($_POST['work_safety_req'] ?? '');
+    
+    $zero_export          = trim($_POST['zero_export'] ?? '');
+    $string_monitoring    = trim($_POST['string_monitoring'] ?? '');
+    $other_components     = trim($_POST['other_components'] ?? '');
+    
+    // จัดการข้อมูลแยกงวดชำระเงิน (Payment Terms)
     $installments = $_POST['installment'] ?? [];
     $payment_terms_array = [];
-    $payment_terms_text_parts = [];
 
     foreach ($installments as $item) {
-        $pct  = trim($item['pct'] ?? '');
-        $desc = trim($item['desc'] ?? '');
-        $amt  = trim($item['amt'] ?? '');
+        $pct     = trim($item['pct'] ?? '');
+        $desc    = trim($item['desc'] ?? '');
+        $amt_raw = trim($item['amt'] ?? '');
 
-        if ($pct !== '' || $desc !== '' || $amt !== '') {
+        if ($pct !== '' || $desc !== '' || $amt_raw !== '') {
             $payment_terms_array[] = [
                 'pct' => $pct,
                 'desc' => $desc,
-                'amt' => $amt
+                'amt' => $amt_raw
             ];
-            $payment_terms_text_parts[] = "งวด ($pct%): $desc " . ($amt ? "($amt บาท)" : "");
         }
     }
 
-    // แปลงข้อมูส่งวดชำระเป็นข้อความเพื่อเก็บในฟิลด์ payment_terms
-    $payment_terms = implode(" | ", $payment_terms_text_parts);
+    $payment_terms_json = json_encode($payment_terms_array, JSON_UNESCAPED_UNICODE);
 
-    // รวบรวมข้อมูลรายละเอียดปลีกย่อยเป็น JSON สำหรับเก็บในฟิลด์ description
-    $extra_details = [
-        "project_no" => $project_no,
-        "installation_address" => $installation_address,
-        "customer_name" => $customer_name,
-        "customer_phone" => $customer_phone,
-        "sales_rep" => $sales_rep,
-        "payment_terms_list" => $payment_terms_array,
-        "system_type" => $_POST['system_type'] ?? '',
-        "panel_spec" => $_POST['panel_spec'] ?? '',
-        "inverter_spec" => $_POST['inverter_spec'] ?? '',
-        "mounting" => $_POST['mounting'] ?? ''
-    ];
-    $description = json_encode($extra_details, JSON_UNESCAPED_UNICODE);
-    
-    $system_details = "Panel: " . ($_POST['panel_spec'] ?? '-') . " | Inverter: " . ($_POST['inverter_spec'] ?? '-');
-    $map_url        = trim($_POST['map_url'] ?? '');
-    $status         = 'In Progress';
-
-    if (empty($name)) {
-        $message = 'กรุณากรอกชื่อโครงการ (Project Name)';
+    if (empty($project_sale_no)) {
+        $message = 'กรุณากรอก Project Sale No.';
         $message_type = 'error';
     } else {
         try {
-            $stmt_insert = $pdo->prepare("INSERT INTO installations (project_sale_no, name, system_size, description, billing_address, payment_terms, system_details, lat_long, map_url, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
-            $stmt_insert->execute([$project_sale_no, $name, $system_size, $description, $billing_address, $payment_terms, $system_details, $lat_long, $map_url, $status]);
+            // บันทึกตรงเข้าตาราง project_designs
+            $stmt_design = $pdo->prepare("INSERT INTO project_designs (
+                project_sale_no, installation_id, project_no, name, customer_name, customer_phone, contract_person, sales_rep, 
+                lat_long, system_size, total_price, billing_address, installation_address, 
+                meter_no, meter_type, system_type, mea_pea_connection, warranty, om, roof_change, structure_addition,
+                panel_spec, inverter_spec, mounting, connection_points, walk_way, installation_req, work_safety_req,
+                zero_export, string_monitoring, other_components, payment_terms_json, created_at
+            ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
 
-            $new_id = $pdo->lastInsertId();
-            
-            // บันทึกสำเร็จ พาไปหน้าจัดการแผนงานย่อยต่อทันที
-            header("Location: edit_installation.php?id=" . $new_id);
-            exit();
+            $stmt_design->execute([
+                $project_sale_no, 
+                $project_no, 
+                $name, 
+                $customer_name, 
+                $customer_phone, 
+                $contract_person,
+                $sales_rep, 
+                $lat_long, 
+                $system_size, 
+                $total_price, 
+                $billing_address, 
+                $installation_address,
+                $meter_no,
+                $meter_type,
+                $system_type,
+                $mea_pea_connection,
+                $warranty,
+                $om,
+                $roof_change,
+                $structure_addition,
+                $panel_spec, 
+                $inverter_spec, 
+                $mounting, 
+                $connection_points,
+                $walk_way,
+                $installation_req,
+                $work_safety_req,
+                $zero_export,
+                $string_monitoring,
+                $other_components,
+                $payment_terms_json
+            ]);
+
+            $swal_success = true;
         } catch (PDOException $e) {
             $message = 'เกิดข้อผิดพลาดในการบันทึกฐานข้อมูล: ' . $e->getMessage();
             $message_type = 'error';
@@ -97,6 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -108,31 +147,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     </script>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
+<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden relative">
 
-    <?php 
-    if (file_exists('sidebar_admin.php')) {
-        include 'sidebar_admin.php';
-    }
-    ?>
+    <div id="sidebarWrapper" class="fixed md:static inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out bg-white border-r border-slate-200 w-64 shrink-0 flex flex-col shadow-xl md:shadow-none h-full overflow-y-auto">
+        <div class="flex-1 overflow-y-auto">
+            <?php 
+            if (file_exists('sidebar_admin.php')) {
+                include 'sidebar_admin.php';
+            }
+            ?>
+        </div>
+    </div>
 
-    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100">
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden"></div>
+
+    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100 w-full">
         
-        <!-- Header -->
-        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-10 shrink-0 z-10 shadow-sm">
-            <div>
-                <h2 class="text-xl font-bold text-slate-900 tracking-tight">PROJECT DESIGN / KICK OFF FORM</h2>
-                <p class="text-sm text-slate-500 mt-0.5">กรอกข้อมูลรายละเอียดโครงการและแยกงวดการชำระเงิน</p>
+        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 shrink-0 z-10 shadow-sm">
+            <div class="flex items-center gap-3">
+                <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+                <div>
+                    <h2 class="text-sm md:text-xl font-bold text-slate-900 tracking-tight truncate">PROJECT DESIGN / KICK OFF FORM</h2>
+                    <p class="text-xs text-slate-500 mt-0.5 hidden sm:block">ฟอร์มบันทึกข้อมูลโครงการตามแบบฟอร์มบริษัท</p>
+                </div>
             </div>
             <div>
-                <a href="work_progress.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all flex items-center gap-2">
-                    <i class="fa-solid fa-arrow-left text-xs"></i> กลับหน้ารายการ
+                <a href="work_progress.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 md:px-4 py-2.5 rounded-2xl text-xs md:text-sm font-semibold transition-all flex items-center gap-2 shrink-0">
+                    <i class="fa-solid fa-arrow-left text-xs"></i> <span class="hidden sm:inline">กลับหน้ารายการ</span>
                 </a>
             </div>
         </header>
 
-        <!-- Content -->
-        <div class="flex-1 overflow-y-auto p-8 w-full">
+        <div class="flex-1 overflow-y-auto p-4 lg:p-8 w-full">
             <div class="max-w-4xl mx-auto space-y-6">
 
                 <?php if (!empty($message)): ?>
@@ -142,28 +190,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 <?php endif; ?>
 
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 space-y-6">
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 lg:p-8 space-y-6">
                     <div class="flex items-center gap-3 pb-6 border-b border-slate-100">
-                        <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-brandGreen flex items-center justify-center text-lg shadow-inner">
+                        <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-brandGreen flex items-center justify-center text-lg shadow-inner shrink-0">
                             <i class="fa-solid fa-file-contract"></i>
                         </div>
                         <div>
-                            <h3 class="text-base font-bold text-slate-900">ฟอร์มบันทึกข้อมูลโครงการ (Kick Off Form)</h3>
-                            <p class="text-xs text-slate-500">กรอกข้อมูลตามแบบฟอร์มเอกสารโครงการ</p>
+                            <h3 class="text-base font-bold text-slate-900">PROJECT DESIGN / KICK OFF FORM</h3>
+                            <p class="text-xs text-slate-500">บันทึกข้อมูลตรงสู่ตาราง project_designs</p>
                         </div>
                     </div>
 
-                    <form action="add_installation_engineer.php" method="POST" class="space-y-6">
+                    <form action="add_installation_admin.php" method="POST" class="space-y-6">
                         
-                        <!-- ส่วนข้อมูลหัวกระดาษ -->
+                        <!-- ข้อมูลหลักส่วนที่ 1 -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="space-y-1">
-                                <label class="block text-xs font-bold text-slate-600 uppercase">Project Sale No.</label>
-                                <input type="text" name="project_sale_no" placeholder="เช่น SW-26090012" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <label class="block text-xs font-bold text-slate-600 uppercase">Project Sale No. *</label>
+                                <input type="text" name="project_sale_no" value="SW-26090012" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Location (Lat/Long)</label>
-                                <input type="text" name="lat_long" placeholder="เช่น 17.882837,102.748563" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="lat_long" value="17.882837,102.748563" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                         </div>
 
@@ -174,140 +222,193 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </div>
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Installation Address</label>
-                                <input type="text" name="installation_address" placeholder="สถานที่ติดตั้งหน้างาน..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="installation_address" value="36/12 ถนนพานพร้าว ต.หมากแข้ง อ.เมืองอุดรธานี จ.อุดรธานี" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Project Name *</label>
-                                <input type="text" name="name" required placeholder="ชื่อโครงการ..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="name" value="กรรมการผู้จัดการ" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Billing Address</label>
-                                <input type="text" name="billing_address" placeholder="ที่อยู่ใบกำกับภาษี..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="billing_address" value="36/12 ถนนพานพร้าว ต.หมากแข้ง อ.เมืองอุดรธานี จ.อุดรธานี" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Customer Name</label>
-                                <input type="text" name="customer_name" placeholder="ชื่อลูกค้า..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="customer_name" value="บริษัท ไฟเอร์ มาร์เก็ต จำกัด (สาขา 00001)" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="block text-xs font-bold text-slate-600 uppercase">Contract Person</label>
+                                <input type="text" name="contract_person" value="บริษัท ไฟเอร์ มาร์เก็ต จำกัด (สาขา 00001)" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Sales Representative</label>
-                                <input type="text" name="sales_rep" placeholder="ชื่อผู้ขาย..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="sales_rep" value="Suwichan" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Customer Phone No.</label>
-                                <input type="text" name="customer_phone" placeholder="เบอร์โทรศัพท์ลูกค้า..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="customer_phone" placeholder="เบอร์โทรศัพท์..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">System Capacity (ขนาดติดตั้ง)</label>
-                                <input type="text" name="system_size" placeholder="เช่น 108.36 kWp" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="system_size" value="108.36" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                         </div>
 
-                        <!-- ส่วนแยกงวดชำระเงิน (Payment Terms / งวดที่, เปอร์เซ็นต์, จำนวนเงิน) -->
-                        <div class="space-y-3 pt-4 border-t border-slate-100">
-                            <label class="block text-xs font-bold text-slate-700 uppercase">เงื่อนไขการชำระเงิน (Payment Terms - แยกงวด)</label>
-                            
-                            <div class="space-y-2">
-                                <div class="grid grid-cols-12 gap-2 text-[11px] font-bold text-slate-500 uppercase px-1">
+                        <!-- ราคารวม -->
+                        <div class="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200 space-y-1">
+                            <label class="block text-xs font-bold text-emerald-800 uppercase"><i class="fa-solid fa-coins me-1"></i> มูลค่าระบบ (รวม VAT) *</label>
+                            <input type="text" id="total_price_input" name="total_price" value="1,550,000" oninput="calculateInstallments()" class="w-full px-4 py-2.5 rounded-xl border border-emerald-300 bg-white text-sm font-bold text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        </div>
+
+                        <!-- เงื่อนไขการชำระเงิน (Payment Terms) -->
+                        <div class="space-y-3 pt-2">
+                            <label class="block text-xs font-bold text-slate-700 uppercase">เงื่อนไขการชำระเงิน (Payment Terms)</label>
+                            <div class="space-y-2 overflow-x-auto">
+                                <div class="grid grid-cols-12 gap-2 text-[11px] font-bold text-slate-500 uppercase px-1 min-w-[500px]">
                                     <div class="col-span-2 text-center">งวดที่</div>
                                     <div class="col-span-3">เปอร์เซ็นต์ (%)</div>
                                     <div class="col-span-4">เงื่อนไข / รายละเอียด</div>
                                     <div class="col-span-3">จำนวนเงิน (บาท)</div>
                                 </div>
 
-                                <!-- งวดที่ 1 -->
-                                <div class="grid grid-cols-12 gap-2 items-center">
+                                <div class="grid grid-cols-12 gap-2 items-center min-w-[500px]">
                                     <div class="col-span-2 text-center font-bold text-xs text-slate-600">งวด 1</div>
-                                    <div class="col-span-3">
-                                        <input type="text" name="installment[0][pct]" value="30%" placeholder="30%" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brandGreen">
-                                    </div>
-                                    <div class="col-span-4">
-                                        <input type="text" name="installment[0][desc]" value="เมื่อตกลงราคา" placeholder="รายละเอียด..." class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brandGreen">
-                                    </div>
-                                    <div class="col-span-3">
-                                        <input type="text" name="installment[0][amt]" placeholder="465,000" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brandGreen">
-                                    </div>
+                                    <div class="col-span-3"><input type="text" name="installment[0][pct]" value="30" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                    <div class="col-span-4"><input type="text" name="installment[0][desc]" value="เมื่อตกลงราคา" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                    <div class="col-span-3"><input type="text" name="installment[0][amt]" value="465,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
                                 </div>
 
-                                <!-- งวดที่ 2 -->
-                                <div class="grid grid-cols-12 gap-2 items-center">
+                                <div class="grid grid-cols-12 gap-2 items-center min-w-[500px]">
                                     <div class="col-span-2 text-center font-bold text-xs text-slate-600">งวด 2</div>
-                                    <div class="col-span-3">
-                                        <input type="text" name="installment[1][pct]" value="30%" placeholder="30%" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brandGreen">
-                                    </div>
-                                    <div class="col-span-4">
-                                        <input type="text" name="installment[1][desc]" value="เมื่อส่งแผงโซล่าร์ถึงหน้างานพร้อมติดตั้ง" placeholder="รายละเอียด..." class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brandGreen">
-                                    </div>
-                                    <div class="col-span-3">
-                                        <input type="text" name="installment[1][amt]" placeholder="465,000" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brandGreen">
-                                    </div>
+                                    <div class="col-span-3"><input type="text" name="installment[1][pct]" value="30" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                    <div class="col-span-4"><input type="text" name="installment[1][desc]" value="เมื่อส่งแผงโซล่าร์ถึงหน้างานพร้อมติดตั้ง" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                    <div class="col-span-3"><input type="text" name="installment[1][amt]" value="465,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
                                 </div>
 
-                                <!-- งวดที่ 3 -->
-                                <div class="grid grid-cols-12 gap-2 items-center">
+                                <div class="grid grid-cols-12 gap-2 items-center min-w-[500px]">
                                     <div class="col-span-2 text-center font-bold text-xs text-slate-600">งวด 3</div>
-                                    <div class="col-span-3">
-                                        <input type="text" name="installment[2][pct]" value="30%" placeholder="30%" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brandGreen">
-                                    </div>
-                                    <div class="col-span-4">
-                                        <input type="text" name="installment[2][desc]" value="เมื่อติดตั้งระบบแล้วเสร็จและจ่ายไฟเข้าระบบ" placeholder="รายละเอียด..." class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brandGreen">
-                                    </div>
-                                    <div class="col-span-3">
-                                        <input type="text" name="installment[2][amt]" placeholder="465,000" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brandGreen">
-                                    </div>
+                                    <div class="col-span-3"><input type="text" name="installment[2][pct]" value="30" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                    <div class="col-span-4"><input type="text" name="installment[2][desc]" value="เมื่อติดตั้งระบบแล้วเสร็จและจ่ายไฟเข้าระบบ" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                    <div class="col-span-3"><input type="text" name="installment[2][amt]" value="465,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
                                 </div>
 
-                                <!-- งวดที่ 4 -->
-                                <div class="grid grid-cols-12 gap-2 items-center">
+                                <div class="grid grid-cols-12 gap-2 items-center min-w-[500px]">
                                     <div class="col-span-2 text-center font-bold text-xs text-slate-600">งวด 4</div>
-                                    <div class="col-span-3">
-                                        <input type="text" name="installment[3][pct]" value="10%" placeholder="10%" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brandGreen">
-                                    </div>
-                                    <div class="col-span-4">
-                                        <input type="text" name="installment[3][desc]" value="เมื่อจ่ายไฟเข้าระบบครบ 15 วัน" placeholder="รายละเอียด..." class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brandGreen">
-                                    </div>
-                                    <div class="col-span-3">
-                                        <input type="text" name="installment[3][amt]" placeholder="155,000" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brandGreen">
-                                    </div>
+                                    <div class="col-span-3"><input type="text" name="installment[3][pct]" value="10" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                    <div class="col-span-4"><input type="text" name="installment[3][desc]" value="เมื่อจ่ายไฟเข้าระบบครบ 15 วัน" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                    <div class="col-span-3"><input type="text" name="installment[3][amt]" value="155,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- ส่วนข้อมูลอุปกรณ์และสเปก -->
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-slate-100">
-                            <div class="space-y-1">
-                                <label class="block text-xs font-bold text-slate-600 uppercase">System Type</label>
-                                <input type="text" name="system_type" placeholder="On-grid / Off-grid / Hybrid" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
-                            </div>
-                            <div class="space-y-1">
-                                <label class="block text-xs font-bold text-slate-600 uppercase">Panel Spec</label>
-                                <input type="text" name="panel_spec" placeholder="รุ่นแผงโซล่าเซลล์..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
-                            </div>
-                            <div class="space-y-1">
-                                <label class="block text-xs font-bold text-slate-600 uppercase">Inverter Spec</label>
-                                <input type="text" name="inverter_spec" placeholder="รุ่นอินเวอร์เตอร์..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                        <!-- ข้อมูลทางเทคนิคส่วนที่ 2 (Usage & Roof Area / Commercial Offer) -->
+                        <div class="space-y-4 pt-4 border-t border-slate-100">
+                            <h4 class="text-xs font-bold text-emerald-700 uppercase"><i class="fa-solid fa-sliders me-1"></i> Usage & Roof Area / Commercial Offer</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">Meter #</label>
+                                    <input type="text" name="meter_no" value="n/a" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">Meter Type</label>
+                                    <input type="text" name="meter_type" value="3 Phase" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">System Type</label>
+                                    <input type="text" name="system_type" value="Ongrid" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">MEA / PEA Connection</label>
+                                    <input type="text" name="mea_pea_connection" value="PEA" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">Warranty</label>
+                                    <input type="text" name="warranty" value="5 Years" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">O&M</label>
+                                    <input type="text" name="om" value="2 time / year" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">Roof Change</label>
+                                    <input type="text" name="roof_change" value="No" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">Structure Addition</label>
+                                    <input type="text" name="structure_addition" value="No" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
                             </div>
                         </div>
 
-                        <div class="space-y-1">
-                            <label class="block text-xs font-bold text-slate-600 uppercase">ลิงก์แผนที่ Google Maps (Map URL)</label>
-                            <input type="text" name="map_url" placeholder="https://maps.google.com/?q=..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                        <!-- ข้อมูลระบบ (System Requirements) -->
+                        <div class="space-y-4 pt-4 border-t border-slate-100">
+                            <h4 class="text-xs font-bold text-emerald-700 uppercase"><i class="fa-solid fa-solar-panel me-1"></i> System Requirements</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">Panel</label>
+                                    <input type="text" name="panel_spec" value="Longi / Himo X 10 -645M จำนวน 168 แผง" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">Inverter</label>
+                                    <input type="text" name="inverter_spec" value="Huawei/SUN2000-100KTL-M2/100KM 1 เครื่อง" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">Mounting</label>
+                                    <input type="text" name="mounting" value="Metalsheet" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">Connection Points</label>
+                                    <input type="text" name="connection_points" value="1" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">Walk way</label>
+                                    <input type="text" name="walk_way" value="Yes" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">Installation</label>
+                                    <input type="text" name="installation_req" value="Yes / Water" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="block text-xs font-bold text-slate-600 uppercase">Work Safety Requirement</label>
+                                <input type="text" name="work_safety_req" value="บริษัท ไฟเอร์ มาร์เก็ต จำกัด (สาขา 00001)" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                            </div>
                         </div>
 
-                        <div class="flex justify-end pt-4 border-t border-slate-100 gap-3">
+                        <!-- ระบบเพิ่มเติม (Additional Systems) -->
+                        <div class="space-y-4 pt-4 border-t border-slate-100">
+                            <h4 class="text-xs font-bold text-emerald-700 uppercase"><i class="fa-solid fa-cogs me-1"></i> Additional Systems</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">Zero Export</label>
+                                    <input type="text" name="zero_export" value="Yes" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">String Monitoring</label>
+                                    <input type="text" name="string_monitoring" value="No" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-xs font-bold text-slate-600 uppercase">Other special components</label>
+                                    <input type="text" name="other_components" value="-" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row justify-end pt-4 border-t border-slate-100 gap-3">
                             <a href="work_progress.php" class="px-6 py-2.5 rounded-2xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-100 transition-all text-center">
                                 ยกเลิก
                             </a>
-                            <button type="submit" class="bg-brandGreen hover:bg-emerald-700 text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-sm transition-all flex items-center gap-2">
-                                <i class="fa-solid fa-floppy-disk text-xs"></i> บันทึกและไปเพิ่มแผนงานย่อย (Task)
+                            <button type="submit" class="bg-brandGreen hover:bg-emerald-700 text-white px-6 py-2.5 rounded-2xl text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-floppy-disk text-xs"></i> บันทึกข้อมูล Project Design
                             </button>
                         </div>
 
@@ -318,5 +419,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </main>
 
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebarWrapper');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+        }
+
+        function calculateInstallments() {
+            const totalPriceInput = document.getElementById('total_price_input');
+            const totalPrice = parseFloat(totalPriceInput.value.replace(/,/g, '')) || 0;
+            const rows = document.querySelectorAll('.grid.grid-cols-12.gap-2.items-center');
+            
+            rows.forEach((row) => {
+                const pctInput = row.querySelector('.pct-input');
+                const amtInput = row.querySelector('.amt-input');
+
+                if (pctInput && amtInput) {
+                    const pctVal = parseFloat(pctInput.value.replace(/[^0-9.]/g, '')) || 0;
+                    if (totalPrice > 0 && pctVal > 0) {
+                        const calculatedAmt = (totalPrice * pctVal) / 100;
+                        amtInput.value = calculatedAmt.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                    }
+                }
+            });
+        }
+
+        <?php if ($swal_success): ?>
+        Swal.fire({
+            icon: 'success',
+            title: 'บันทึกข้อมูลสำเร็จ!',
+            text: 'ข้อมูล Project Design ถูกบันทึกลงตาราง project_designs เรียบร้อยแล้ว',
+            confirmButtonText: 'ตกลง',
+            confirmButtonColor: '#059669',
+            allowOutsideClick: false
+        }).then((result) => {
+            if (result.isConfirmed) {
+                window.location.href = 'add_installation_admin.php';
+            }
+        });
+        <?php endif; ?>
+    </script>
 </body>
 </html>

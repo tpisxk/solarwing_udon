@@ -65,13 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <!-- Sidebar พร้อมฟังก์ชันซ่อน/แสดง -->
         <div id="sidebar" class="fixed lg:static inset-y-0 left-0 z-30 transform -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out bg-white border-r border-slate-200 w-64 flex-shrink-0 flex flex-col">
             
-            <!-- หัว Sidebar พร้อมปุ่มปิดบนมือถือ / จอใหญ่ -->
-            <div class="h-16 lg:h-20 flex items-center justify-between px-4 border-b border-slate-100 shrink-0">
-                <span class="font-bold text-slate-800 text-sm lg:text-base">SolarStock Menu</span>
-                <button onclick="toggleSidebar()" class="lg:hidden text-slate-500 hover:text-slate-800 p-2 rounded-lg">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
-            </div>
+            
 
             <!-- เนื้อหา Sidebar (ดึงมาจากไฟล์เดิมหรือแสดงผลเมนู) -->
             <div class="flex-1 overflow-y-auto">
@@ -92,10 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
                         <i class="fa-solid fa-bars text-lg"></i>
                     </button>
-                    <!-- ปุ่มซ่อน/แสดง Sidebar บนหน้าจอคอมพิวเตอร์ (Collapse) -->
-                    <button onclick="toggleDesktopSidebar()" class="hidden lg:flex text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none items-center justify-center">
-                        <i class="fa-solid fa-outdent text-lg" id="desktop-toggle-icon"></i>
-                    </button>
+                    
                     <h2 class="text-base lg:text-xl font-bold tracking-tight text-slate-800 truncate">เพิ่มสินค้า / อุปกรณ์โซล่าเซลล์</h2>
                 </div>
                 <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 lg:px-4 lg:py-2.5 rounded-xl lg:rounded-2xl text-xs font-semibold flex items-center gap-2 shrink-0">

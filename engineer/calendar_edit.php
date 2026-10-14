@@ -34,17 +34,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$title, $appointment_date, $start_time, $end_time, $status, $details, $id]);
 
             // ส่งสถานะกลับไปแสดง Popup แก้ไขสำเร็จที่หน้า calendar.php
-            header("Location: calendar_engineer.php?status=success&action=edit&month={$redirect_month}&year={$redirect_year}");
+            header("Location: calendar.php?status=success&action=edit&month={$redirect_month}&year={$redirect_year}");
             exit();
 
         } catch (PDOException $e) {
             // หากเกิดข้อผิดพลาดจากฐานข้อมูล
-            header("Location: calendar_engineer.php?status=error&month={$redirect_month}&year={$redirect_year}");
+            header("Location: calendar.php?status=error&month={$redirect_month}&year={$redirect_year}");
             exit();
         }
     }
 }
 
 // หากเข้ามาโดยไม่มีการส่งข้อมูล POST หรือข้อมูลไม่ครบ
-header("Location: engineer/calendar_engineer.php?month={$redirect_month}&year={$redirect_year}");
+header("Location: User/calendar.php?month={$redirect_month}&year={$redirect_year}");
 exit();

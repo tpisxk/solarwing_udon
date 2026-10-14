@@ -107,7 +107,7 @@ try {
         <!-- Header Bar -->
         <header class="h-20 bg-white border-b border-slate-200/80 flex items-center justify-between px-6 md:px-10 shrink-0 z-10 shadow-xs">
             <div class="flex items-center gap-3">
-                <button onclick="toggleSidebar()" class="md:hidden text-slate-600 p-2.5 rounded-xl bg-slate-100 border border-slate-200 hover:bg-slate-200 transition-all">
+                <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
                     <i class="fa-solid fa-bars text-sm"></i>
                 </button>
                 <h2 class="text-base md:text-xl font-bold text-slate-900 tracking-tight">จัดการค่าใช้จ่ายและต้นทุนโครงการ</h2>

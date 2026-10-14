@@ -61,12 +61,7 @@ try {
 
     <!-- Sidebar พร้อมคลาสสำหรับซ่อน/แสดง -->
     <div id="sidebar" class="fixed lg:static inset-y-0 left-0 z-30 transform -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out bg-white border-r border-slate-200 w-64 flex-shrink-0 flex flex-col">
-        <div class="h-16 lg:h-20 flex items-center justify-between px-4 border-b border-slate-100 shrink-0 lg:hidden">
-            <span class="font-bold text-slate-800 text-sm">SolarStock Menu</span>
-            <button onclick="toggleSidebar()" class="text-slate-500 hover:text-slate-800 p-2 rounded-lg">
-                <i class="fa-solid fa-xmark text-lg"></i>
-            </button>
-        </div>
+        
         <div class="flex-1 overflow-y-auto">
             <?php include 'sidebar.php'; ?>
         </div>
@@ -85,13 +80,10 @@ try {
                 <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
                     <i class="fa-solid fa-bars text-lg"></i>
                 </button>
-                <!-- ปุ่มพับ/ซ่อน Sidebar บนคอมพิวเตอร์ -->
-                <button onclick="toggleDesktopSidebar()" class="hidden lg:flex text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none items-center justify-center">
-                    <i class="fa-solid fa-outdent text-lg"></i>
-                </button>
+                
                 <div>
                     <h2 class="text-base lg:text-xl font-bold text-slate-900 tracking-tight">รายงานรายการโครงการและต้นทุนอุปกรณ์สุทธิ</h2>
-                    <p class="text-xs text-slate-500 mt-0.5 hidden sm:block">ตรวจสอบสรุปข้อมูลหน้างาน ขนาดติดตั้ง พิกัดแผนที่ และมูลค่าต้นทุนอุปกรณ์แต่ละโครงการ</p>
+                    <!-- <p class="text-xs text-slate-500 mt-0.5 hidden sm:block">ตรวจสอบสรุปข้อมูลหน้างาน ขนาดติดตั้ง พิกัดแผนที่ และมูลค่าต้นทุนอุปกรณ์แต่ละโครงการ</p> -->
                 </div>
             </div>
             <div class="flex items-center gap-2 lg:gap-3 shrink-0">
