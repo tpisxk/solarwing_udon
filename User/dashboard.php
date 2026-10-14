@@ -72,30 +72,52 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
         tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { brandGreen: '#059669' } } } }
     </script>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
+<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden relative">
 
-    <?php if (file_exists('sidebar.php')) include 'sidebar.php'; ?>
+    <!-- Sidebar พร้อมคลาสสำหรับซ่อน/แสดง -->
+    <div id="sidebar" class="fixed lg:static inset-y-0 left-0 z-30 transform -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out bg-white border-r border-slate-200 w-64 flex-shrink-0 flex flex-col">
+        <div class="h-16 lg:h-20 flex items-center justify-between px-4 border-b border-slate-100 shrink-0 lg:hidden">
+            <span class="font-bold text-slate-800 text-sm">SolarStock Menu</span>
+            <button onclick="toggleSidebar()" class="text-slate-500 hover:text-slate-800 p-2 rounded-lg">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        <div class="flex-1 overflow-y-auto">
+            <?php if (file_exists('sidebar.php')) include 'sidebar.php'; ?>
+        </div>
+    </div>
 
-    <main class="flex-1 flex flex-col h-full overflow-hidden">
+    <!-- Background Overlay เมื่อเปิด Sidebar บนมือถือ -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-20 hidden lg:hidden"></div>
+
+    <main class="flex-1 flex flex-col h-full overflow-hidden w-full">
         <!-- Header -->
-        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-10 shrink-0 shadow-sm">
+        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 shrink-0 shadow-sm z-10">
             <div class="flex items-center gap-3">
+                <!-- ปุ่มเปิด Sidebar บนมือถือ -->
+                <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+                <!-- ปุ่มพับ/ซ่อน Sidebar บนคอมพิวเตอร์ -->
+                <button onclick="toggleDesktopSidebar()" class="hidden lg:flex text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none items-center justify-center">
+                    <i class="fa-solid fa-outdent text-lg"></i>
+                </button>
                 <span class="relative flex h-3 w-3">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                 </span>
                 <div>
-                    <h2 class="text-xl font-bold text-slate-900">ภาพรวมคลังสินค้าและค่าใช้จ่ายโครงการ</h2>
+                    <h2 class="text-base lg:text-xl font-bold text-slate-900 truncate">ภาพรวมคลังสินค้าและค่าใช้จ่ายโครงการ</h2>
                     <p class="text-xs text-slate-500">ระบบจัดการและวิเคราะห์ข้อมูลเรียลไทม์</p>
                 </div>
             </div>
-            <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2">
+            <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2 shrink-0">
                 <i class="fa-solid fa-house text-emerald-600"></i> หน้าหลัก
             </a>
         </header>
 
         <!-- Main Content -->
-        <div class="flex-1 overflow-y-auto p-8 space-y-6">
+        <div class="flex-1 overflow-y-auto p-4 lg:p-8 space-y-6">
             <?php if (isset($db_error)): ?>
                 <div class="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-2xl text-xs">
                     <i class="fa-solid fa-triangle-exclamation me-1"></i> เชื่อมต่อฐานข้อมูลล้มเหลว: <?= htmlspecialchars($db_error) ?>
@@ -227,6 +249,21 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
     </main>
 
     <script>
+        // ควบคุมสำหรับมือถือ (Slide เปิด-ปิด)
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+        }
+
+        // ควบคุมสำหรับคอมพิวเตอร์ (ซ่อนแถบเมนูให้พับเก็บซ้ายสุด)
+        function toggleDesktopSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('lg:-ml-64');
+            sidebar.classList.toggle('lg:opacity-0');
+        }
+
         // Number Counter Animation
         document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.counter').forEach(c => {
@@ -256,16 +293,32 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
                 labels: <?= json_encode($chart_labels) ?>,
                 datasets: [{ data: <?= json_encode($chart_data) ?>, backgroundColor: '#059669', borderRadius: 8 }]
             },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-        });
-
-        new Chart(document.getElementById('doughnutChart'), {
-            type: 'doughnut',
-            data: {
-                labels: ['ปกติ', 'ใกล้หมด', 'หมด'],
-                datasets: [{ data: [<?= $normal_count ?>, <?= $low_count ?>, <?= $out_count ?>], backgroundColor: ['#10b981', '#f59e0b', '#f43f5e'], borderWidth: 0 }]
-            },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, cutout: '70%' }
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { 
+                    legend: { display: false } 
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            font: { family: 'Prompt', size: 10 },
+                            maxRotation: 25, // ปรับมุมองศาไม่ให้เอียงทับกันเกินไป
+                            minRotation: 0,
+                            callback: function(value) {
+                                let label = this.getLabelForValue(value);
+                                // ตัดคำถ้ายาวเกิน 18 ตัวอักษร เพื่อไม่ให้เบียดกัน
+                                return label.length > 18 ? label.substring(0, 18) + '...' : label;
+                            }
+                        },
+                        grid: { display: false }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { font: { family: 'Prompt', size: 10 } }
+                    }
+                }
+            }
         });
     </script>
 </body>

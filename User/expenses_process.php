@@ -21,13 +21,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
+    // จัดการอัปโหลดรูปสลิปหลักฐาน
+    $receipt_path = null;
+    if (isset($_FILES['receipt_image']) && $_FILES['receipt_image']['error'] === UPLOAD_ERR_OK) {
+        $upload_dir = '../uploads/receipts/'; // โฟลเดอร์สำหรับเก็บสลิป
+        if (!is_dir($upload_dir)) {
+            mkdir($upload_dir, 0777, true);
+        }
+
+        $file_info = pathinfo($_FILES['receipt_image']['name']);
+        $file_ext = strtolower($file_info['extension']);
+        $allowed_exts = ['jpg', 'jpeg', 'png', 'webp'];
+
+        if (in_array($file_ext, $allowed_exts)) {
+            $new_file_name = 'receipt_' . time() . '_' . mt_rand(1000, 9999) . '.' . $file_ext;
+            $target_file = $upload_dir . $new_file_name;
+
+            if (move_uploaded_file($_FILES['receipt_image']['tmp_name'], $target_file)) {
+                $receipt_path = $target_file; // พาธที่จะบันทึกลงฐานข้อมูล
+            }
+        }
+    }
+
     try {
-        // บันทึกข้อมูลค่าใช้จ่ายลงตาราง expenses (รวม installation_id)
+        // บันทึกข้อมูลค่าใช้จ่ายและพาธรูปสลิปลงตาราง expenses
         $stmt = $pdo->prepare("
-            INSERT INTO expenses (installation_id, title, amount, category, created_at) 
-            VALUES (?, ?, ?, ?, NOW())
+            INSERT INTO expenses (installation_id, title, amount, category, receipt_image, created_at) 
+            VALUES (?, ?, ?, ?, ?, NOW())
         ");
-        $stmt->execute([$installation_id, $title, $amount, $category]);
+        $stmt->execute([$installation_id, $title, $amount, $category, $receipt_path]);
 
         // บันทึกสำเร็จ กลับไปหน้า expenses.php พร้อมแจ้งเตือน success
         header("Location: expenses.php?status=success");

@@ -102,24 +102,47 @@ try {
         }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
+<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden relative">
 
-    <!-- Sidebar -->
-    <?php include 'sidebar.php'; ?>
+    <!-- Sidebar พร้อมคลาสสำหรับซ่อน/แสดง -->
+    <div id="sidebar" class="fixed lg:static inset-y-0 left-0 z-30 transform -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out bg-white border-r border-slate-200 w-64 flex-shrink-0 flex flex-col">
+        <div class="h-16 lg:h-20 flex items-center justify-between px-4 border-b border-slate-100 shrink-0 lg:hidden">
+            <span class="font-bold text-slate-800 text-sm">SolarStock Menu</span>
+            <button onclick="toggleSidebar()" class="text-slate-500 hover:text-slate-800 p-2 rounded-lg">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        <div class="flex-1 overflow-y-auto">
+            <?php include 'sidebar.php'; ?>
+        </div>
+    </div>
+
+    <!-- Background Overlay เมื่อเปิด Sidebar บนมือถือ -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-20 hidden lg:hidden"></div>
 
     <!-- Main Content -->
-    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100">
+    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100 w-full">
 
         <!-- Header Bar -->
-        <header class="h-20 bg-white border-b border-slate-200/80 flex items-center justify-between px-10 shrink-0 z-10 shadow-xs">
-            <h2 class="text-xl font-bold text-slate-900 tracking-tight">รับสินค้าเข้าคลัง (Stock In)</h2>
-            <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2">
+        <header class="h-20 bg-white border-b border-slate-200/80 flex items-center justify-between px-6 lg:px-10 shrink-0 z-10 shadow-xs">
+            <div class="flex items-center gap-3">
+                <!-- ปุ่มเปิด Sidebar บนมือถือ -->
+                <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+                <!-- ปุ่มพับ/ซ่อน Sidebar บนคอมพิวเตอร์ -->
+                <button onclick="toggleDesktopSidebar()" class="hidden lg:flex text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none items-center justify-center">
+                    <i class="fa-solid fa-outdent text-lg"></i>
+                </button>
+                <h2 class="text-base lg:text-xl font-bold text-slate-900 tracking-tight">รับสินค้าเข้าคลัง (Stock In)</h2>
+            </div>
+            <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2 shrink-0">
                 <i class="fa-solid fa-house text-emerald-600"></i> หน้าหลัก
             </a>
         </header>
 
         <!-- Main Body -->
-        <div class="flex-1 overflow-y-auto p-10 space-y-6">
+        <div class="flex-1 overflow-y-auto p-4 lg:p-10 space-y-6">
 
             <!-- แจ้งเตือนสถานะ -->
             <?php if (isset($_GET['status'])): ?>
@@ -137,7 +160,7 @@ try {
             <?php endif; ?>
 
             <!-- ฟอร์มรับเข้าสินค้า -->
-            <div class="bg-white p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
+            <div class="bg-white p-6 lg:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
                 <div>
                     <h3 class="text-lg font-bold text-slate-900">ฟอร์มรับเข้าสินค้า (Restock / Purchase)</h3>
                     <p class="text-xs text-slate-500 mt-1">เลือกรายการสินค้า ระบุจำนวนที่ต้องการรับเข้าคลัง และข้อมูลอ้างอิง</p>
@@ -191,7 +214,7 @@ try {
 
                     <!-- ปุ่มกดยืนยัน -->
                     <div class="md:col-span-3 flex justify-end pt-2">
-                        <button type="submit" class="bg-brandGreen hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl text-xs font-semibold shadow-md shadow-emerald-600/25 transition-all">
+                        <button type="submit" class="w-full sm:w-auto bg-brandGreen hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl text-xs font-semibold shadow-md shadow-emerald-600/25 transition-all">
                             ยืนยันรับเข้าสินค้า
                         </button>
                     </div>
@@ -242,8 +265,23 @@ try {
         </div>
     </main>
 
-    <!-- Script สำหรับเรียกใช้งาน Tom Select -->
+    <!-- Script สำหรับควบคุม Sidebar และ Tom Select -->
     <script>
+        // ควบคุมสำหรับมือถือ (Slide เปิด-ปิด)
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+        }
+
+        // ควบคุมสำหรับคอมพิวเตอร์ (ซ่อนแถบเมนูให้พับเก็บซ้ายสุด)
+        function toggleDesktopSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('lg:-ml-64');
+            sidebar.classList.toggle('lg:opacity-0');
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             // Dropdown เลือกสินค้า
             new TomSelect("#product_select", {

@@ -87,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="inline-flex items-center justify-center w-20 h-20">
                 <img src="Pic/SW.png" alt="Logo" class="w-full h-full object-contain">
             </div>
-            <h1 class="text-2xl font-bold text-slate-900">Solarwing Stock Management</h1>
+            <h1 class="text-2xl font-bold text-slate-900">Solarwing  Management</h1>
             <p class="text-xs text-slate-500">กรุณาเข้าสู่ระบบเพื่อจัดการอุปกรณ์และคลังสินค้า</p>
         </div>
 
