@@ -7,16 +7,16 @@ header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
 require_once '../db/conn.php';
 require_once '../auth_check.php';
 
-// จัดการอัปเดตราคาต้นทุนผ่าน AJAX
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_cost') {
+// จัดการอัปเดตราคาต้นทุนผ่าน AJAX พร้อมป้องกันค่าติดลบ
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) &&$_POST['action'] === 'update_cost') {
     header('Content-Type: application/json; charset=utf-8');
     $product_id = intval($_POST['product_id'] ?? 0);
     $new_cost = floatval($_POST['cost_price'] ?? 0);
 
-    if ($product_id > 0 && $new_cost >= 0) {
+    if ($product_id > 0 &&$new_cost >= 0) {
         try {
-            $stmt = $pdo->prepare("UPDATE products SET cost_price = ? WHERE id = ?");
-            $stmt->execute([$new_cost, $product_id]);
+            $stmt =$pdo->prepare("UPDATE products SET cost_price = ? WHERE id = ?");
+            $stmt->execute([$new_cost,$product_id]);
             echo json_encode(['status' => 'success', 'message' => 'อัปเดตราคาต้นทุนเรียบร้อยแล้ว']);
             exit();
         } catch (PDOException $e) {
@@ -24,24 +24,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             exit();
         }
     }
-    echo json_encode(['status' => 'error', 'message' => 'ข้อมูลไม่ถูกต้อง']);
+    echo json_encode(['status' => 'error', 'message' => 'ข้อมูลไม่ถูกต้อง (ราคาต้องไม่ติดลบ)']);
     exit();
 }
 
-// ดึงข้อมูลสินค้าทั้งหมด เรียงตามรหัส SKU
-$stmt = $pdo->query("SELECT * FROM products ORDER BY sku ASC");
-$products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// ดึงข้อมูลสินค้าทั้งหมด เรียงตามรหัส SKU (ใช้ GREATEST เพื่อป้องกันค่าติดลบในระดับฐานข้อมูลถ้าต้องการ หรือปล่อยตามจริงแต่นำมาแสดงผลเป็น 0 หรือแดง)
+$stmt =$pdo->query("SELECT * FROM products ORDER BY sku ASC");
+$products =$stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // จัดกลุ่มหมวดหมู่ตามตัวอักษรนำหน้า (ตัดตัวเลขและเครื่องหมายขีดออก เช่น SR1 -> SR)
 $skuGroups = [];
-foreach ($products as $row) {
+foreach ($products as$row) {
     $sku = trim($row['sku']);
     if (!empty($sku)) {
-        preg_match('/^[A-Za-z]+/', $sku, $matches);
-        $prefix = !empty($matches[0]) ? strtoupper($matches[0]) : 'OT';
+        preg_match('/^[A-Za-z]+/', $sku, $matches);$prefix = !empty($matches[0]) ? strtoupper($matches[0]) : 'OT';
 
-        if (!in_array($prefix, $skuGroups)) {
-            $skuGroups[] = $prefix;
+        if (!in_array($prefix,$skuGroups)) {
+            $skuGroups[] =$prefix;
         }
     }
 }
@@ -98,20 +97,14 @@ sort($skuGroups);
 <body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
 
     <!-- Sidebar สำหรับมือถือ (สไลด์เปิด-ปิด) และคอมพิวเตอร์ (แสดงปกติ) -->
-<div id="sidebarWrapper" class="fixed md:static inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out bg-white border-r border-slate-200 w-64 shrink-0 flex flex-col shadow-xl md:shadow-none h-full overflow-y-auto">
-    <div class="h-16 flex items-center justify-between px-4 border-b border-slate-100 shrink-0 md:hidden">
-        <span class="font-bold text-slate-800 text-sm">SolarStock Menu</span>
-        <button onclick="toggleSidebar()" class="text-slate-500 hover:text-slate-800 p-2 rounded-lg">
-            <i class="fa-solid fa-xmark text-lg"></i>
-        </button>
+    <div id="sidebarWrapper" class="fixed md:static inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out bg-white border-r border-slate-200 w-64 shrink-0 flex flex-col shadow-xl md:shadow-none h-full overflow-y-auto">
+        <div class="flex-1 overflow-y-auto">
+            <?php if (file_exists('sidebar_admin.php')) include 'sidebar_admin.php'; ?>
+        </div>
     </div>
-    <div class="flex-1 overflow-y-auto">
-        <?php if (file_exists('sidebar_admin.php')) include 'sidebar_admin.php'; ?>
-    </div>
-</div>
 
-<!-- Background Overlay เมื่อเปิด Sidebar บนมือถือ -->
-<div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden"></div>
+    <!-- Background Overlay เมื่อเปิด Sidebar บนมือถือ -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden"></div>
     <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100 w-full">
 
         <!-- Header Bar -->
@@ -137,12 +130,12 @@ sort($skuGroups);
                 <?php if ($_GET['import'] == 'success'): ?>
                     <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-6 py-4 rounded-2xl text-sm font-medium flex items-center justify-between shadow-xs">
                         <span>✨ นำเข้าข้อมูลสำเร็จเรียบร้อยแล้ว (อัปเดตไป <?= htmlspecialchars($_GET['count'] ?? 0) ?> รายการ)</span>
-                        <a href="inventory.php" class="text-emerald-700 font-bold hover:underline text-xs">✕ ปิด</a>
+                        <a href="inventory_admin.php" class="text-emerald-700 font-bold hover:underline text-xs">✕ ปิด</a>
                     </div>
                 <?php else: ?>
                     <div class="bg-rose-50 border border-rose-200 text-rose-800 px-6 py-4 rounded-2xl text-sm font-medium flex items-center justify-between shadow-xs">
                         <span>❌ เกิดข้อผิดพลาดในการนำเข้าไฟล์ กรุณาตรวจสอบรูปแบบไฟล์ใหม่อีกครั้ง</span>
-                        <a href="inventory.php" class="text-rose-700 font-bold hover:underline text-xs">✕ ปิด</a>
+                        <a href="inventory_admin.php" class="text-rose-700 font-bold hover:underline text-xs">✕ ปิด</a>
                     </div>
                 <?php endif; ?>
             <?php endif; ?>
@@ -151,10 +144,10 @@ sort($skuGroups);
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs gap-4">
                 <div>
                     <h3 class="text-lg md:text-2xl font-bold text-slate-900">สต็อกสินค้าคงเหลือ</h3>
-                    <p class="text-xs text-slate-500 mt-1">สามารถคลิกแก้ไขราคาต้นทุนในตารางและคลิกนอกช่องเพื่อบันทึกอัตโนมัติ</p>
+                    <p class="text-xs text-slate-500 mt-1">สามารถคลิกแก้ไขราคาต้นทุนในตารางและคลิกนอกช่องเพื่อบันทึกอัตโนมัติ (สินค้าหมดหรือเหลือ 0 จะแสดงสีแดง)</p>
                 </div>
                 <div class="flex items-center gap-3 w-full md:w-auto">
-                    <input type="text" id="searchSku" placeholder="🔍 ค้นหารหัสสินค้า / ชื่อ..." oninput="changePage(1)" class="px-5 py-3 border border-slate-200 rounded-2xl text-sm w-full md:w-72 focus:outline-none focus:border-emerald-600 bg-slate-50 font-medium">
+                    <input type="text" id="searchSku" placeholder="🔍 ค้นหารหัสสินค้า / ชื่อ..." class="px-5 py-3 border border-slate-200 rounded-2xl text-sm w-full md:w-80 focus:outline-none focus:border-emerald-600 bg-slate-50 font-medium">
                     <button onclick="openImportModal()" class="bg-brandGreen hover:bg-emerald-700 text-white px-5 py-3 rounded-2xl text-sm font-semibold shadow-md shadow-emerald-600/25 transition-all flex items-center gap-2 shrink-0">
                         📥 <span class="hidden sm:inline">นำเข้าไฟล์</span> (Excel / CSV)
                     </button>
@@ -167,22 +160,20 @@ sort($skuGroups);
                     <button onclick="filterGroup('all')" id="group-all" class="group-tab px-4 py-2.5 rounded-2xl text-xs font-semibold bg-emerald-600 text-white shadow-sm transition-all shrink-0 whitespace-nowrap">
                         📂 ทั้งหมด (<?= count($products) ?>)
                     </button>
-                    <?php foreach ($skuGroups as $grp): ?>
+                    <?php foreach ($skuGroups as$grp): ?>
                         <?php
                         $grpCount = 0;
-                        foreach ($products as $p) {
+                        foreach ($products as$p) {
                             $pSku = trim($p['sku']);
                             if (!empty($pSku)) {
-                                preg_match('/^[A-Za-z]+/', $pSku, $m);
-                                $pPrefix = !empty($m[0]) ? strtoupper($m[0]) : 'OT';
-                                if ($pPrefix === $grp) {
-                                    $grpCount++;
+                                preg_match('/^[A-Za-z]+/', $pSku, $m);$pPrefix = !empty($m[0]) ? strtoupper($m[0]) : 'OT';
+                                if ($pPrefix === $grp) {$grpCount++;
                                 }
                             }
                         }
                         ?>
                         <button onclick="filterGroup('<?= htmlspecialchars($grp, ENT_QUOTES) ?>')" id="group-<?= htmlspecialchars($grp) ?>" class="group-tab px-4 py-2.5 rounded-2xl text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all shrink-0 whitespace-nowrap">
-                            🏷️ หมวด <?= htmlspecialchars($grp) ?> (<?= $grpCount ?>)
+                            🏷️ หมวด <?= htmlspecialchars($grp) ?> (<?=$grpCount ?>)
                         </button>
                     <?php endforeach; ?>
                 </div>
@@ -203,13 +194,16 @@ sort($skuGroups);
                         </thead>
                         <tbody class="divide-y divide-slate-100" id="productTableBody">
                             <?php if (count($products) > 0): ?>
-                                <?php foreach ($products as $row): ?>
+                                <?php foreach ($products as$row): ?>
                                     <?php
                                     $sku = trim($row['sku']);
-                                    preg_match('/^[A-Za-z]+/', $sku, $m);
-                                    $rowGroup = !empty($m[0]) ? strtoupper($m[0]) : 'OT';
+                                    preg_match('/^[A-Za-z]+/', $sku, $m);$rowGroup = !empty($m[0]) ? strtoupper($m[0]) : 'OT';
+                                    $searchData = strtolower(trim($row['sku'] . ' ' . $row['name'] . ' ' .$row['category']));
+                                    $stockQty = intval($row['stock_quantity'] ?? 0);
                                     ?>
-                                    <tr class="hover:bg-slate-50/80 transition-colors product-row" data-sku-prefix="<?= htmlspecialchars($rowGroup, ENT_QUOTES) ?>">
+                                    <tr class="hover:bg-slate-50/80 transition-colors product-row" 
+                                        data-sku-prefix="<?= htmlspecialchars($rowGroup, ENT_QUOTES) ?>"
+                                        data-search-text="<?= htmlspecialchars($searchData, ENT_QUOTES) ?>">
                                         <td class="p-5 font-bold text-slate-700">
                                             <span class="bg-slate-100 border border-slate-200 px-3 py-1 rounded-xl text-emerald-700"><?= htmlspecialchars($row['sku']) ?></span>
                                         </td>
@@ -217,7 +211,7 @@ sort($skuGroups);
                                         <td class="p-5">
                                             <span class="px-3 py-1 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200"><?= htmlspecialchars($row['category']) ?></span>
                                         </td>
-                                        <!-- ช่องแก้ไขราคาต้นทุนแบบ Inline -->
+                                        <!-- ช่องแก้ไขราคาต้นทุนแบบ Inline (บังคับห้ามติดลบ) -->
                                         <td class="p-5 text-right font-medium">
                                             <div class="inline-flex items-center gap-1 justify-end">
                                                 <span class="text-slate-400 text-xs">฿</span>
@@ -227,14 +221,19 @@ sort($skuGroups);
                                                     class="cost-input w-28 px-3 py-1.5 text-right border border-slate-200 rounded-xl text-xs font-bold text-slate-800 bg-slate-50 transition-all">
                                             </div>
                                         </td>
-                                        <td class="p-5 text-right font-bold text-brandGreen"><?= number_format($row['stock_quantity']) ?></td>
+                                        <!-- แสดงผลจำนวนคงเหลือ: ถ้าน้อยกว่าหรือเท่ากับ 0 แสดงเป็นสีแดง -->
+                                        <td class="p-5 text-right font-bold <?= $stockQty <= 0 ? 'text-rose-600 bg-rose-50' : 'text-brandGreen' ?>">
+                                            <?= number_format(max($stockQty, 0)) ?>
+                                            <?php if ($stockQty <= 0): ?>
+                                                <span class="text-[10px] block text-rose-500 font-semibold">(สินค้าหมด!)</span>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
-                            <?php else: ?>
-                                <tr id="noDataRow">
-                                    <td colspan="5" class="p-12 text-center text-slate-400 font-medium">ไม่พบข้อมูลสินค้าในฐานข้อมูล</td>
-                                </tr>
                             <?php endif; ?>
+                            <tr id="noDataRow" class="hidden">
+                                <td colspan="5" class="p-12 text-center text-slate-400 font-medium">ไม่พบข้อมูลสินค้าที่ตรงกับคำค้นหา</td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -291,7 +290,7 @@ sort($skuGroups);
         </div>
     </div>
 
-    <!-- Script ควบคุมระบบ Sidebar, ตัวกรอง, ค้นหา, Pagination และแก้ไขราคา -->
+    <!-- Script ควบคุมระบบ Sidebar, ตัวกรอง, ค้นหาแบบยืดหยุ่นด้วย some() และ Pagination -->
     <script>
         function toggleSidebar() {
             document.getElementById('sidebarWrapper').classList.toggle('-translate-x-full');
@@ -309,18 +308,10 @@ sort($skuGroups);
                 btn.classList.add('bg-white', 'text-slate-600', 'border', 'border-slate-200');
             });
 
-            if (group === 'all') {
-                let activeBtn = document.getElementById('group-all');
-                if (activeBtn) {
-                    activeBtn.classList.remove('bg-white', 'text-slate-600', 'border', 'border-slate-200');
-                    activeBtn.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
-                }
-            } else {
-                let activeBtn = document.getElementById('group-' + group);
-                if (activeBtn) {
-                    activeBtn.classList.remove('bg-white', 'text-slate-600', 'border', 'border-slate-200');
-                    activeBtn.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
-                }
+            let activeBtn = document.getElementById('group-' + group) || document.getElementById('group-all');
+            if (activeBtn) {
+                activeBtn.classList.remove('bg-white', 'text-slate-600', 'border', 'border-slate-200');
+                activeBtn.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
             }
 
             currentPage = 1;
@@ -338,16 +329,23 @@ sort($skuGroups);
         }
 
         function updateTablePagination() {
-            let searchFilter = document.getElementById('searchSku').value.toLowerCase();
+            let searchInputVal = document.getElementById('searchSku').value.trim().toLowerCase();
+            let keywords = searchInputVal.split(/\s+/).filter(k => k.length > 0);
+
             let rows = Array.from(document.querySelectorAll('.product-row'));
             let rowsPerPage = parseInt(document.getElementById('rowsPerPage').value) || 10;
+            let noDataRow = document.getElementById('noDataRow');
 
             let matchedRows = rows.filter(row => {
                 let rowPrefix = row.getAttribute('data-sku-prefix');
-                let rowText = row.innerText.toLowerCase();
+                let rowSearchText = row.getAttribute('data-search-text') || '';
 
                 let matchesGroup = (currentGroup === 'all' || rowPrefix === currentGroup);
-                let matchesSearch = rowText.includes(searchFilter);
+                
+                let matchesSearch = true;
+                if (keywords.length > 0) {
+                    matchesSearch = keywords.some(kw => rowSearchText.includes(kw));
+                }
 
                 return matchesGroup && matchesSearch;
             });
@@ -360,19 +358,22 @@ sort($skuGroups);
 
             rows.forEach(row => row.style.display = 'none');
 
+            if (totalMatched === 0) {
+                if (noDataRow) noDataRow.classList.remove('hidden');
+                document.getElementById('tableInfo').innerText = 'ไม่พบข้อมูลสินค้า';
+                document.getElementById('paginationControls').innerHTML = '';
+                return;
+            } else {
+                if (noDataRow) noDataRow.classList.add('hidden');
+            }
+
             let startIndex = (currentPage - 1) * rowsPerPage;
             let endIndex = startIndex + rowsPerPage;
             let currentRows = matchedRows.slice(startIndex, endIndex);
 
             currentRows.forEach(row => row.style.display = '');
 
-            let infoText = '';
-            if (totalMatched === 0) {
-                infoText = 'ไม่พบข้อมูลสินค้า';
-            } else {
-                infoText = `กำลังแสดง ${startIndex + 1} ถึง ${Math.min(endIndex, totalMatched)} จากทั้งหมด ${totalMatched} รายการ`;
-            }
-            document.getElementById('tableInfo').innerText = infoText;
+            document.getElementById('tableInfo').innerText = `กำลังแสดง ${startIndex + 1} ถึง ${Math.min(endIndex, totalMatched)} จากทั้งหมด ${totalMatched} รายการ`;
 
             let paginationHtml = '';
             paginationHtml += `<button onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold bg-white text-slate-600 disabled:opacity-45 disabled:cursor-not-allowed hover:bg-slate-50"><i class="fa-solid fa-chevron-left"></i></button>`;
@@ -393,17 +394,23 @@ sort($skuGroups);
 
         document.addEventListener('DOMContentLoaded', () => {
             updateTablePagination();
+
+            document.getElementById('searchSku').addEventListener('input', () => {
+                currentPage = 1;
+                updateTablePagination();
+            });
         });
 
-        document.getElementById('searchSku').addEventListener('keyup', () => {
-            currentPage = 1;
-            updateTablePagination();
-        });
-
-        // ฟังก์ชันอัปเดตราคาต้นทุนผ่าน AJAX ทันทีเมื่อแก้เสร็จ
+        // ฟังก์ชันอัปเดตราคาต้นทุนผ่าน AJAX ทันทีเมื่อแก้เสร็จ (ป้องกันค่าติดลบ)
         function updateCostPrice(inputElement) {
             let productId = inputElement.getAttribute('data-id');
-            let newCost = inputElement.value;
+            let newCost = parseFloat(inputElement.value);
+
+            if (isNaN(newCost) || newCost < 0) {
+                alert('ราคาต้นทุนต้องไม่ติดลบ');
+                inputElement.value = 0;
+                newCost = 0;
+            }
 
             let formData = new FormData();
             formData.append('action', 'update_cost');

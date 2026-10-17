@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>เพิ่มสินค้าใหม่ - SolarStock Pro</title>
     <!-- โหลด Favicon ของโปรเจกต์ -->
-    <link rel="icon" type="image/png" href="../assets/images/logo.png">
+    <link rel="icon" type="image/png" href="../Pic/456456.png">
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome สำหรับไอคอน -->

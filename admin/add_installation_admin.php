@@ -74,7 +74,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message_type = 'error';
     } else {
         try {
-            // บันทึกตรงเข้าตาราง project_designs
             $stmt_design = $pdo->prepare("INSERT INTO project_designs (
                 project_sale_no, installation_id, project_no, name, customer_name, customer_phone, contract_person, sales_rep, 
                 lat_long, system_size, total_price, billing_address, installation_address, 
@@ -109,18 +108,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $mounting, 
                 $connection_points,
                 $walk_way,
-                $installation_req,
-                $work_safety_req,
-                $zero_export,
-                $string_monitoring,
-                $other_components,
-                $payment_terms_json
+                $installation_req,$work_safety_req,
+                $zero_export,$string_monitoring,
+                $other_components,$payment_terms_json
             ]);
 
             $swal_success = true;
-        } catch (PDOException $e) {
-            $message = 'เกิดข้อผิดพลาดในการบันทึกฐานข้อมูล: ' . $e->getMessage();
-            $message_type = 'error';
+        } catch (PDOException $e) {$message = 'เกิดข้อผิดพลาดในการบันทึกฐานข้อมูล: ' . $e->getMessage();$message_type = 'error';
         }
     }
 }
@@ -271,41 +265,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         <!-- เงื่อนไขการชำระเงิน (Payment Terms) -->
                         <div class="space-y-3 pt-2">
-                            <label class="block text-xs font-bold text-slate-700 uppercase">เงื่อนไขการชำระเงิน (Payment Terms)</label>
+                            <div class="flex items-center justify-between">
+                                <label class="block text-xs font-bold text-slate-700 uppercase">เงื่อนไขการชำระเงิน (Payment Terms)</label>
+                                <button type="button" onclick="addInstallmentRow()" class="bg-emerald-50 hover:bg-emerald-100 text-brandGreen px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-emerald-200">
+                                    <i class="fa-solid fa-plus text-[10px]"></i> เพิ่มงวด
+                                </button>
+                            </div>
+
                             <div class="space-y-2 overflow-x-auto">
-                                <div class="grid grid-cols-12 gap-2 text-[11px] font-bold text-slate-500 uppercase px-1 min-w-[500px]">
+                                <div class="grid grid-cols-12 gap-2 text-[11px] font-bold text-slate-500 uppercase px-1 min-w-[550px]">
                                     <div class="col-span-2 text-center">งวดที่</div>
                                     <div class="col-span-3">เปอร์เซ็นต์ (%)</div>
                                     <div class="col-span-4">เงื่อนไข / รายละเอียด</div>
-                                    <div class="col-span-3">จำนวนเงิน (บาท)</div>
+                                    <div class="col-span-2">จำนวนเงิน (บาท)</div>
+                                    <div class="col-span-1 text-center">จัดการ</div>
                                 </div>
 
-                                <div class="grid grid-cols-12 gap-2 items-center min-w-[500px]">
-                                    <div class="col-span-2 text-center font-bold text-xs text-slate-600">งวด 1</div>
-                                    <div class="col-span-3"><input type="text" name="installment[0][pct]" value="30" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                    <div class="col-span-4"><input type="text" name="installment[0][desc]" value="เมื่อตกลงราคา" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                    <div class="col-span-3"><input type="text" name="installment[0][amt]" value="465,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
-                                </div>
+                                <div id="installmentContainer" class="space-y-2 min-w-[550px]">
+                                    <!-- งวดที่ 1 -->
+                                    <div class="grid grid-cols-12 gap-2 items-center installment-row">
+                                        <div class="col-span-2 text-center font-bold text-xs text-slate-600 installment-label">งวด 1</div>
+                                        <div class="col-span-3"><input type="text" name="installment[0][pct]" value="30" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-4"><input type="text" name="installment[0][desc]" value="เมื่อตกลงราคา" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-2"><input type="text" name="installment[0][amt]" value="465,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
+                                        <div class="col-span-1 text-center">
+                                            <button type="button" onclick="removeInstallmentRow(this)" class="text-rose-500 hover:text-rose-700 p-2 text-xs"><i class="fa-solid fa-trash-can"></i></button>
+                                        </div>
+                                    </div>
 
-                                <div class="grid grid-cols-12 gap-2 items-center min-w-[500px]">
-                                    <div class="col-span-2 text-center font-bold text-xs text-slate-600">งวด 2</div>
-                                    <div class="col-span-3"><input type="text" name="installment[1][pct]" value="30" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                    <div class="col-span-4"><input type="text" name="installment[1][desc]" value="เมื่อส่งแผงโซล่าร์ถึงหน้างานพร้อมติดตั้ง" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                    <div class="col-span-3"><input type="text" name="installment[1][amt]" value="465,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
-                                </div>
+                                    <!-- งวดที่ 2 -->
+                                    <div class="grid grid-cols-12 gap-2 items-center installment-row">
+                                        <div class="col-span-2 text-center font-bold text-xs text-slate-600 installment-label">งวด 2</div>
+                                        <div class="col-span-3"><input type="text" name="installment[1][pct]" value="30" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-4"><input type="text" name="installment[1][desc]" value="เมื่อส่งแผงโซล่าร์ถึงหน้างานพร้อมติดตั้ง" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-2"><input type="text" name="installment[1][amt]" value="465,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
+                                        <div class="col-span-1 text-center">
+                                            <button type="button" onclick="removeInstallmentRow(this)" class="text-rose-500 hover:text-rose-700 p-2 text-xs"><i class="fa-solid fa-trash-can"></i></button>
+                                        </div>
+                                    </div>
 
-                                <div class="grid grid-cols-12 gap-2 items-center min-w-[500px]">
-                                    <div class="col-span-2 text-center font-bold text-xs text-slate-600">งวด 3</div>
-                                    <div class="col-span-3"><input type="text" name="installment[2][pct]" value="30" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                    <div class="col-span-4"><input type="text" name="installment[2][desc]" value="เมื่อติดตั้งระบบแล้วเสร็จและจ่ายไฟเข้าระบบ" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                    <div class="col-span-3"><input type="text" name="installment[2][amt]" value="465,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
-                                </div>
+                                    <!-- งวดที่ 3 -->
+                                    <div class="grid grid-cols-12 gap-2 items-center installment-row">
+                                        <div class="col-span-2 text-center font-bold text-xs text-slate-600 installment-label">งวด 3</div>
+                                        <div class="col-span-3"><input type="text" name="installment[2][pct]" value="30" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-4"><input type="text" name="installment[2][desc]" value="เมื่อติดตั้งระบบแล้วเสร็จและจ่ายไฟเข้าระบบ" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-2"><input type="text" name="installment[2][amt]" value="465,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
+                                        <div class="col-span-1 text-center">
+                                            <button type="button" onclick="removeInstallmentRow(this)" class="text-rose-500 hover:text-rose-700 p-2 text-xs"><i class="fa-solid fa-trash-can"></i></button>
+                                        </div>
+                                    </div>
 
-                                <div class="grid grid-cols-12 gap-2 items-center min-w-[500px]">
-                                    <div class="col-span-2 text-center font-bold text-xs text-slate-600">งวด 4</div>
-                                    <div class="col-span-3"><input type="text" name="installment[3][pct]" value="10" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                    <div class="col-span-4"><input type="text" name="installment[3][desc]" value="เมื่อจ่ายไฟเข้าระบบครบ 15 วัน" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                    <div class="col-span-3"><input type="text" name="installment[3][amt]" value="155,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
+                                    <!-- งวดที่ 4 -->
+                                    <div class="grid grid-cols-12 gap-2 items-center installment-row">
+                                        <div class="col-span-2 text-center font-bold text-xs text-slate-600 installment-label">งวด 4</div>
+                                        <div class="col-span-3"><input type="text" name="installment[3][pct]" value="10" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-4"><input type="text" name="installment[3][desc]" value="เมื่อจ่ายไฟเข้าระบบครบ 15 วัน" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-2"><input type="text" name="installment[3][amt]" value="155,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
+                                        <div class="col-span-1 text-center">
+                                            <button type="button" onclick="removeInstallmentRow(this)" class="text-rose-500 hover:text-rose-700 p-2 text-xs"><i class="fa-solid fa-trash-can"></i></button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -430,7 +449,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         function calculateInstallments() {
             const totalPriceInput = document.getElementById('total_price_input');
             const totalPrice = parseFloat(totalPriceInput.value.replace(/,/g, '')) || 0;
-            const rows = document.querySelectorAll('.grid.grid-cols-12.gap-2.items-center');
+            const rows = document.querySelectorAll('.installment-row');
             
             rows.forEach((row) => {
                 const pctInput = row.querySelector('.pct-input');
@@ -443,6 +462,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         amtInput.value = calculatedAmt.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
                     }
                 }
+            });
+        }
+
+        function addInstallmentRow() {
+            const container = document.getElementById('installmentContainer');
+            const rowCount = container.querySelectorAll('.installment-row').length;
+            
+            const newRow = document.createElement('div');
+            newRow.className = 'grid grid-cols-12 gap-2 items-center installment-row';
+            newRow.innerHTML = `
+                <div class="col-span-2 text-center font-bold text-xs text-slate-600 installment-label">งวด ${rowCount + 1}</div>
+                <div class="col-span-3"><input type="text" name="installment[${rowCount}][pct]" value="0" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                <div class="col-span-4"><input type="text" name="installment[${rowCount}][desc]" placeholder="รายละเอียดงวด..." class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                <div class="col-span-2"><input type="text" name="installment[${rowCount}][amt]" value="0" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
+                <div class="col-span-1 text-center">
+                    <button type="button" onclick="removeInstallmentRow(this)" class="text-rose-500 hover:text-rose-700 p-2 text-xs"><i class="fa-solid fa-trash-can"></i></button>
+                </div>
+            `;
+            container.appendChild(newRow);
+            updateInstallmentLabels();
+        }
+
+        function removeInstallmentRow(btn) {
+            const row = btn.closest('.installment-row');
+            const container = document.getElementById('installmentContainer');
+            if (container.querySelectorAll('.installment-row').length > 1) {
+                row.remove();
+                updateInstallmentLabels();
+                calculateInstallments();
+            } else {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'ไม่สามารถลบได้',
+                    text: 'ต้องมีงวดชำระเงินอย่างน้อย 1 งวด',
+                    confirmButtonColor: '#059669'
+                });
+            }
+        }
+
+        function updateInstallmentLabels() {
+            const rows = document.querySelectorAll('.installment-row');
+            rows.forEach((row, index) => {
+                const label = row.querySelector('.installment-label');
+                if (label) {
+                    label.textContent = `งวด ${index + 1}`;
+                }
+                // อัปเดต attribute name ให้เรียงลำดับใหม่ถูกต้องตอน submit
+                const inputs = row.querySelectorAll('input');
+                inputs.forEach(input => {
+                    const nameAttr = input.getAttribute('name');
+                    if (nameAttr) {
+                        const newName = nameAttr.replace(/\[\d+\]/, `[${index}]`);
+                        input.setAttribute('name', newName);
+                    }
+                });
             });
         }
 

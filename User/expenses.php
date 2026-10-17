@@ -6,7 +6,7 @@ header("Pragma: no-cache");
 header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
 require_once '../db/conn.php';
 require_once '../auth_check.php';
-$current_page = 'expenses'; // กำหนดหน้าปัจจุบันสำหรับ Sidebar
+$current_page = 'expenses'; // กำหนดหน้าปัจจุบันสำหรับSidebar
 
 // 1. ดึงข้อมูลค่าใช้จ่ายทั่วไป
 try {
@@ -23,6 +23,23 @@ try {
 } catch (PDOException $e) {
     $expensesList = [];
     $totalGeneralExpense = 0;
+}
+
+// 1.1 ดึงข้อมูลรายรับทั่วไป
+try {
+    $stmt_inc = $pdo->query("
+        SELECT inc.*, i.name as project_name 
+        FROM incomes inc 
+        LEFT JOIN installations i ON inc.installation_id = i.id 
+        ORDER BY inc.created_at DESC LIMIT 50
+    ");
+    $incomesList = $stmt_inc->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmt_total_inc = $pdo->query("SELECT SUM(amount) as total FROM incomes");
+    $totalGeneralIncome = $stmt_total_inc->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
+} catch (PDOException $e) {
+    $incomesList = [];
+    $totalGeneralIncome = 0;
 }
 
 // 2. ดึงรายชื่อโครงการสำหรับใส่ใน Dropdown
@@ -51,13 +68,22 @@ try {
 } catch (PDOException $e) {
     $projectsCost = [];
 }
+
+// คำนวณมูลค่าวัสดุอุปกรณ์สุทธิรวมทั้งหมด
+$totalMaterialCost = 0;
+foreach ($projectsCost as $proj) {
+    $totalMaterialCost += ($proj['total_out'] - $proj['total_return']);
+}
+
+// คำนวณกำไรสุทธิ = รายรับรวม - มูลค่าวัสดุสุทธิ - ค่าใช้จ่ายรวม
+$netProfit = $totalGeneralIncome - $totalMaterialCost - $totalGeneralExpense;
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>จัดการค่าใช้จ่ายและต้นทุนโครงการ - SolarStock Pro</title>
+    <title>จัดการรายรับ ค่าใช้จ่าย และต้นทุนโครงการ - SolarStock Pro</title>
     <link rel="icon" type="image/png" href="../Pic/456456.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -95,7 +121,7 @@ try {
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
 
-    <!-- Sidebar สำหรับมือถือและเดสก์ท็อป -->
+    <!-- Sidebar -->
     <div id="sidebarWrapper" class="fixed inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 md:static transition-transform duration-300 ease-in-out">
         <?php if (file_exists('sidebar.php')) include 'sidebar.php'; ?>
     </div>
@@ -110,7 +136,7 @@ try {
                 <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
                     <i class="fa-solid fa-bars text-sm"></i>
                 </button>
-                <h2 class="text-base md:text-xl font-bold text-slate-900 tracking-tight">จัดการค่าใช้จ่ายและต้นทุนโครงการ</h2>
+                <h2 class="text-base md:text-xl font-bold text-slate-900 tracking-tight">จัดการรายรับ ค่าใช้จ่าย และต้นทุนโครงการ</h2>
             </div>
             <div class="flex items-center gap-2">
                 <button onclick="openPrintModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2 shadow-sm transition-all">
@@ -129,7 +155,7 @@ try {
             <?php if (isset($_GET['status'])): ?>
                 <?php if ($_GET['status'] == 'success'): ?>
                     <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-6 py-4 rounded-2xl text-sm font-medium flex items-center justify-between shadow-xs">
-                        <span>✨ บันทึกรายการค่าใช้จ่ายและสลิปโอนเงินเรียบร้อยแล้ว</span>
+                        <span>✨ บันทึกข้อมูลเรียบร้อยแล้ว</span>
                         <a href="expenses.php" class="text-emerald-700 font-bold hover:underline text-xs">✕ ปิด</a>
                     </div>
                 <?php elseif ($_GET['status'] == 'error'): ?>
@@ -139,6 +165,28 @@ try {
                     </div>
                 <?php endif; ?>
             <?php endif; ?>
+
+            <!-- ส่วนสรุปภาพรวมทางการเงิน (Financial Summary Cards) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-1">
+                    <p class="text-xs font-semibold text-slate-400">รายรับรวมทั้งหมด</p>
+                    <h3 class="text-xl font-bold text-emerald-600">+<?= number_format($totalGeneralIncome, 2) ?> <span class="text-xs font-normal">บาท</span></h3>
+                </div>
+                <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-1">
+                    <p class="text-xs font-semibold text-slate-400">มูลค่าวัสดุอุปกรณ์สุทธิ</p>
+                    <h3 class="text-xl font-bold text-indigo-600">-<?= number_format($totalMaterialCost, 2) ?> <span class="text-xs font-normal">บาท</span></h3>
+                </div>
+                <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-1">
+                    <p class="text-xs font-semibold text-slate-400">ค่าใช้จ่ายทั่วไปรวม</p>
+                    <h3 class="text-xl font-bold text-rose-600">-<?= number_format($totalGeneralExpense, 2) ?> <span class="text-xs font-normal">บาท</span></h3>
+                </div>
+                <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-1">
+                    <p class="text-xs font-semibold text-slate-400">กำไรสุทธิภาพรวม</p>
+                    <h3 class="text-xl font-bold <?= $netProfit >= 0 ? 'text-emerald-700' : 'text-rose-700' ?>">
+                        <?= number_format($netProfit, 2) ?> <span class="text-xs font-normal">บาท</span>
+                    </h3>
+                </div>
+            </div>
 
             <!-- ส่วนที่ 1: สรุปต้นทุนวัสดุอุปกรณ์แต่ละโครงการ -->
             <div class="bg-white rounded-3xl border border-slate-200/80 p-6 md:p-8 space-y-6 shadow-xs">
@@ -179,15 +227,14 @@ try {
                 </div>
             </div>
 
-            <!-- ส่วนที่ 2: ฟอร์มบันทึกค่าใช้จ่ายทั่วไป (รองรับเพิ่มหมวดหมู่ และแนบสลิป) -->
+            <!-- ฟอร์มเพิ่มรายการรายรับ -->
             <div class="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
                 <div>
-                    <h3 class="text-base md:text-lg font-bold text-slate-900">เพิ่มรายการค่าใช้จ่ายทั่วไป</h3>
-                    <p class="text-xs text-slate-500 mt-1">บันทึกค่าใช้จ่ายอื่นๆ พร้อมเลือกหรือพิมพ์หมวดหมู่ใหม่ และแนบรูปสลิปโอนเงินได้ทันที</p>
+                    <h3 class="text-base md:text-lg font-bold text-emerald-700"><i class="fa-solid fa-circle-plus me-1"></i> เพิ่มรายการรายรับ</h3>
+                    <p class="text-xs text-slate-500 mt-1">บันทึกเงินรับเข้าโครงการ เงินมัดจำ หรือรายรับส่วนกลาง พร้อมแนบหลักฐานการรับเงิน</p>
                 </div>
 
-                <form action="expenses_process.php" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-6 gap-4">
-                    <!-- โครงการ (Dropdown) -->
+                <form action="income_process.php" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-6 gap-4">
                     <div class="space-y-1.5 md:col-span-2">
                         <label class="block text-xs font-semibold text-slate-600">โครงการ / หน้างาน (ระบุหรือไม่ก็ได้)</label>
                         <select name="installation_id" class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-medium">
@@ -198,19 +245,68 @@ try {
                         </select>
                     </div>
 
-                    <!-- รายละเอียดค่าใช้จ่าย -->
+                    <div class="space-y-1.5 md:col-span-2">
+                        <label class="block text-xs font-semibold text-slate-600">รายการ / รายละเอียดรายรับ</label>
+                        <input type="text" name="title" required placeholder="เช่น รับเงินงวดที่ 1..." class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-medium">
+                    </div>
+
+                    <div class="space-y-1.5 md:col-span-1">
+                        <label class="block text-xs font-semibold text-slate-600">จำนวนเงินรับ (บาท)</label>
+                        <input type="number" step="0.01" name="amount" min="0.01" required placeholder="0.00" class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-medium">
+                    </div>
+
+                    <div class="space-y-1.5 md:col-span-1">
+                        <label class="block text-xs font-semibold text-slate-600">หมวดหมู่รายรับ</label>
+                        <input type="text" name="category" list="incomeCategoryList" required placeholder="เลือกหรือพิมพ์หมวดหมู่..." value="รายรับโครงการ" class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-medium">
+                        <datalist id="incomeCategoryList">
+                            <option value="รายรับโครงการ">
+                            <option value="เงินมัดจำ">
+                            <option value="เงินสนับสนุน">
+                            <option value="อื่นๆ">
+                        </datalist>
+                    </div>
+
+                    <div class="space-y-1.5 md:col-span-6">
+                        <label class="block text-xs font-semibold text-slate-600">แนบหลักฐานการรับเงิน / สลิปโอนเข้า (ถ้ามี)</label>
+                        <input type="file" name="receipt_image" accept="image/*" class="w-full p-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
+                    </div>
+
+                    <div class="md:col-span-6 flex justify-end pt-2">
+                        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl text-xs font-semibold shadow-md shadow-emerald-600/25 transition-all cursor-pointer">
+                            บันทึกรายรับ
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ฟอร์มเพิ่มรายการค่าใช้จ่ายทั่วไป -->
+            <div class="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
+                <div>
+                    <h3 class="text-base md:text-lg font-bold text-slate-900">เพิ่มรายการค่าใช้จ่ายทั่วไป</h3>
+                    <p class="text-xs text-slate-500 mt-1">บันทึกค่าใช้จ่ายอื่นๆ พร้อมเลือกหรือพิมพ์หมวดหมู่ใหม่ และแนบรูปสลิปโอนเงินได้ทันที</p>
+                </div>
+
+                <form action="expenses_process.php" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                    <div class="space-y-1.5 md:col-span-2">
+                        <label class="block text-xs font-semibold text-slate-600">โครงการ / หน้างาน (ระบุหรือไม่ก็ได้)</label>
+                        <select name="installation_id" class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-medium">
+                            <option value="">-- ส่วนกลาง / ไม่ระบุโครงการ --</option>
+                            <?php foreach ($installationsDropdown as $inst): ?>
+                                <option value="<?= $inst['id'] ?>"><?= htmlspecialchars($inst['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
                     <div class="space-y-1.5 md:col-span-2">
                         <label class="block text-xs font-semibold text-slate-600">รายการ / รายละเอียดค่าใช้จ่าย</label>
                         <input type="text" name="title" required placeholder="เช่น ค่าขนส่งแผงโซล่าเซลล์..." class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-medium">
                     </div>
 
-                    <!-- จำนวนเงิน -->
                     <div class="space-y-1.5 md:col-span-1">
                         <label class="block text-xs font-semibold text-slate-600">จำนวนเงิน (บาท)</label>
                         <input type="number" step="0.01" name="amount" min="0.01" required placeholder="0.00" class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-medium">
                     </div>
 
-                    <!-- หมวดหมู่ (เลือกหรือพิมพ์เพิ่ม) -->
                     <div class="space-y-1.5 md:col-span-1">
                         <label class="block text-xs font-semibold text-slate-600">หมวดหมู่ค่าใช้จ่าย</label>
                         <input type="text" name="category" list="categoryList" required placeholder="เลือกหรือพิมพ์หมวดหมู่..." value="ทั่วไป" class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-medium">
@@ -225,7 +321,6 @@ try {
                         </datalist>
                     </div>
 
-                    <!-- แนบรูปสลิป / หลักฐานการโอนเงิน -->
                     <div class="space-y-1.5 md:col-span-6">
                         <label class="block text-xs font-semibold text-slate-600">แนบรูปสลิปโอนเงิน / หลักฐานการจ่ายเงิน (ถ้ามี)</label>
                         <input type="file" name="receipt_image" accept="image/*" class="w-full p-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
@@ -239,7 +334,68 @@ try {
                 </form>
             </div>
 
-            <!-- ส่วนที่ 3: ตารางประวัติค่าใช้จ่ายทั่วไปพร้อมแสดงภาพสลิป -->
+            <!-- ตารางประวัติรายการรายรับล่าสุด -->
+            <div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden p-6 space-y-4">
+                <h3 class="text-base font-bold text-emerald-700 px-2"><i class="fa-solid fa-list-check me-1"></i> ประวัติรายการรายรับล่าสุด</h3>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs min-w-[700px]">
+                        <thead>
+                            <tr class="border-b border-slate-100 text-slate-400 uppercase tracking-wider">
+                                <th class="py-3 px-4 font-semibold">วันที่ / เวลา</th>
+                                <th class="py-3 px-4 font-semibold">โครงการ</th>
+                                <th class="py-3 px-4 font-semibold">รายการรับ</th>
+                                <th class="py-3 px-4 font-semibold">หมวดหมู่</th>
+                                <th class="py-3 px-4 font-semibold text-center">หลักฐาน</th>
+                                <th class="py-3 px-4 font-semibold text-right">จำนวนเงินรับ (บาท)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+                            <?php if (!empty($incomesList)): ?>
+                                <?php foreach ($incomesList as $row): 
+                                    $raw_img = trim($row['receipt_image'] ?? '');
+                                    $full_img_url = '';
+                                    if ($raw_img !== '') {
+                                        if (preg_match('/^http?:\/\//i', $raw_img) || preg_match('/^\//', $raw_img)) {
+                                            $full_img_url = $raw_img;
+                                        } else {
+                                            $clean_img = preg_replace('#^(\.\./)+#', '', $raw_img);
+                                            $clean_img = preg_replace('#^(uploads/receipts/|uploads/)+#', '', $clean_img);
+                                            $full_img_url = '../uploads/receipts/' . $clean_img;
+                                        }
+                                    }
+                                ?>
+                                    <tr class="hover:bg-slate-50/80 transition-all">
+                                        <td class="py-3.5 px-4 text-slate-500"><?= htmlspecialchars($row['created_at'] ?? '-') ?></td>
+                                        <td class="py-3.5 px-4 text-slate-600 font-semibold"><?= htmlspecialchars($row['project_name'] ?? 'ส่วนกลาง / ไม่ระบุ') ?></td>
+                                        <td class="py-3.5 px-4 font-bold text-slate-900"><?= htmlspecialchars($row['title'] ?? '-') ?></td>
+                                        <td class="py-3.5 px-4">
+                                            <span class="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full text-[11px] font-semibold"><?= htmlspecialchars($row['category'] ?? 'รายรับ') ?></span>
+                                        </td>
+                                        <td class="py-3.5 px-4 text-center">
+                                            <?php if ($full_img_url): ?>
+                                                <div class="flex items-center justify-center gap-2">
+                                                    <img src="<?= htmlspecialchars($full_img_url) ?>" alt="หลักฐาน" onclick="openImageModal('<?= htmlspecialchars($full_img_url) ?>')" class="w-10 h-10 object-cover rounded-xl border border-slate-200 cursor-pointer hover:opacity-80 transition-opacity shadow-xs" onerror="this.onerror=null; this.src='../Pic/456456.png';">
+                                                    <button onclick="openImageModal('<?= htmlspecialchars($full_img_url) ?>')" class="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2.5 py-1 rounded-xl text-[11px] font-bold inline-flex items-center gap-1">ดูหลักฐาน</button>
+                                                </div>
+                                            <?php else: ?>
+                                                <span class="text-slate-400 text-xs">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="py-3.5 px-4 text-right font-bold text-emerald-600">+<?= number_format($row['amount'] ?? 0, 2) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="6" class="py-10 text-center text-slate-400 font-normal">ยังไม่มีรายการรายรับในระบบ</td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ตารางประวัติค่าใช้จ่ายทั่วไปล่าสุด -->
             <div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden p-6 space-y-4">
                 <h3 class="text-base font-bold text-slate-900 px-2">ประวัติค่าใช้จ่ายทั่วไปล่าสุด</h3>
                 
@@ -257,7 +413,19 @@ try {
                         </thead>
                         <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
                             <?php if (!empty($expensesList)): ?>
-                                <?php foreach ($expensesList as $row): ?>
+                                <?php foreach ($expensesList as $row): 
+                                    $raw_img = trim($row['receipt_image'] ?? '');
+                                    $full_img_url = '';
+                                    if ($raw_img !== '') {
+                                        if (preg_match('/^http?:\/\//i', $raw_img) || preg_match('/^\//', $raw_img)) {
+                                            $full_img_url = $raw_img;
+                                        } else {
+                                            $clean_img = preg_replace('#^(\.\./)+#', '', $raw_img);
+                                            $clean_img = preg_replace('#^(uploads/receipts/|uploads/)+#', '', $clean_img);
+                                            $full_img_url = '../uploads/receipts/' . $clean_img;
+                                        }
+                                    }
+                                ?>
                                     <tr class="hover:bg-slate-50/80 transition-all">
                                         <td class="py-3.5 px-4 text-slate-500"><?= htmlspecialchars($row['created_at'] ?? '-') ?></td>
                                         <td class="py-3.5 px-4 text-slate-600 font-semibold">
@@ -269,12 +437,11 @@ try {
                                                 <?= htmlspecialchars($row['category'] ?? 'ทั่วไป') ?>
                                             </span>
                                         </td>
-                                        <!-- คอลัมน์แสดงรูปสลิป -->
                                         <td class="py-3.5 px-4 text-center">
-                                            <?php if (!empty($row['receipt_image'])): ?>
+                                            <?php if ($full_img_url): ?>
                                                 <div class="flex items-center justify-center gap-2">
-                                                    <img src="<?= htmlspecialchars($row['receipt_image']) ?>" alt="สลิป" onclick="openImageModal('<?= htmlspecialchars($row['receipt_image']) ?>')" class="w-10 h-10 object-cover rounded-xl border border-slate-200 cursor-pointer hover:opacity-80 transition-opacity shadow-xs">
-                                                    <button onclick="openImageModal('<?= htmlspecialchars($row['receipt_image']) ?>')" class="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2.5 py-1 rounded-xl text-[11px] font-bold inline-flex items-center gap-1">
+                                                    <img src="<?= htmlspecialchars($full_img_url) ?>" alt="สลิป" onclick="openImageModal('<?= htmlspecialchars($full_img_url) ?>')" class="w-10 h-10 object-cover rounded-xl border border-slate-200 cursor-pointer hover:opacity-80 transition-opacity shadow-xs" onerror="this.onerror=null; this.src='../Pic/456456.png';">
+                                                    <button onclick="openImageModal('<?= htmlspecialchars($full_img_url) ?>')" class="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2.5 py-1 rounded-xl text-[11px] font-bold inline-flex items-center gap-1">
                                                         <i class="fa-solid fa-expand"></i> ดูสลิป
                                                     </button>
                                                 </div>
@@ -298,11 +465,11 @@ try {
         </div>
     </main>
 
-    <!-- Modal แสดงรูปสลิปขนาดใหญ่ -->
+    <!-- Modal แสดงรูปขนาดใหญ่ -->
     <div id="imageModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-xs hidden items-center justify-center z-50 p-4">
         <div class="bg-white p-6 rounded-3xl max-w-lg w-full shadow-2xl space-y-4 text-center">
             <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                <h4 class="font-bold text-slate-900 text-sm">หลักฐานการโอนเงิน / สลิป</h4>
+                <h4 class="font-bold text-slate-900 text-sm">หลักฐานการทำรายการ / สลิป</h4>
                 <button onclick="closeImageModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
             </div>
             <div class="flex justify-center max-h-[70vh] overflow-auto">
@@ -314,15 +481,14 @@ try {
         </div>
     </div>
 
-    <!-- Modal ตัวอย่างพิมพ์รายงาน PDF (TH Sarabun) -->
+    <!-- Modal ตัวอย่างพิมพ์รายงาน PDF -->
     <div id="printReportModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-xs hidden items-center justify-center z-50 p-4 overflow-y-auto">
         <div class="bg-white rounded-3xl max-w-4xl w-full p-6 md:p-10 shadow-2xl border border-slate-200 space-y-6 max-h-[92vh] overflow-y-auto">
             <div class="flex items-center justify-between border-b border-slate-200 pb-5 no-print">
                 <div class="flex items-center gap-3">
                     <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center font-bold"><i class="fa-solid fa-file-pdf text-lg"></i></div>
                     <div>
-                        <h3 class="text-base font-bold text-slate-900">ตัวอย่างรายงานค่าใช้จ่ายและต้นทุน</h3>
-                        <p class="text-xs text-slate-500 font-medium">รูปแบบฟอนต์: TH Sarabun</p>
+                        <h3 class="text-base font-bold text-slate-900">ตัวอย่างรายงานรายรับ ค่าใช้จ่าย และต้นทุน</h3>
                     </div>
                 </div>
                 <div class="flex items-center gap-2.5">
@@ -330,98 +496,49 @@ try {
                     <button type="button" onclick="closePrintModal()" class="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
-
+            <!-- ส่วนพิมพ์รายงานย่อ -->
             <div id="printableExpenseReport" class="p-6 bg-white text-slate-900 space-y-5 font-sarabun text-base">
                 <div class="flex items-center justify-between border-b-2 border-slate-800 pb-4">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center text-2xl font-bold"><i class="fa-solid fa-solar-panel"></i></div>
-                        <div>
-                            <h1 class="text-2xl font-bold uppercase tracking-wide text-slate-900 leading-tight">SOLARSTOCK</h1>
-                            <p class="text-sm font-semibold text-slate-600">รายงานสรุปค่าใช้จ่ายและต้นทุนโครงการ (EXPENSE & COST REPORT)</p>
-                        </div>
+                    <div>
+                        <h1 class="text-2xl font-bold uppercase tracking-wide text-slate-900 leading-tight">SOLARSTOCK PRO</h1>
+                        <p class="text-sm font-semibold text-slate-600">รายงานสรุปรายรับ ค่าใช้จ่าย และต้นทุนโครงการ</p>
                     </div>
                     <div class="text-right">
-                        <span class="inline-block px-3 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded text-xs font-bold uppercase mb-1">OFFICIAL REPORT</span>
                         <p class="text-xs font-semibold text-slate-600">วันที่พิมพ์: <?= date('d/m/Y') ?></p>
                     </div>
                 </div>
-
-                <div class="space-y-3">
-                    <h4 class="font-bold text-slate-800 uppercase text-base border-b border-slate-200 pb-1">1. ประวัติค่าใช้จ่ายทั่วไป</h4>
-                    <table class="w-full text-left border-collapse border border-slate-300 text-sm">
-                        <thead>
-                            <tr class="bg-slate-800 text-white font-bold text-sm">
-                                <th class="py-2 px-3 border border-slate-700">วันที่</th>
-                                <th class="py-2 px-3 border border-slate-700">โครงการ</th>
-                                <th class="py-2 px-3 border border-slate-700">รายการ</th>
-                                <th class="py-2 px-3 border border-slate-700">หมวดหมู่</th>
-                                <th class="py-2 px-3 border border-slate-700 text-right">จำนวนเงิน (บาท)</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-200">
-                            <?php if (!empty($expensesList)): foreach ($expensesList as $row): ?>
-                            <tr>
-                                <td class="py-2 px-3 border border-slate-300 text-xs"><?= htmlspecialchars($row['created_at']) ?></td>
-                                <td class="py-2 px-3 border border-slate-300 font-semibold"><?= htmlspecialchars($row['project_name'] ?? 'ส่วนกลาง') ?></td>
-                                <td class="py-2 px-3 border border-slate-300"><?= htmlspecialchars($row['title']) ?></td>
-                                <td class="py-2 px-3 border border-slate-300"><?= htmlspecialchars($row['category']) ?></td>
-                                <td class="py-2 px-3 border border-slate-300 text-right font-bold text-rose-700"><?= number_format($row['amount'], 2) ?></td>
-                            </tr>
-                            <?php endforeach; else: ?>
-                            <tr><td colspan="5" class="py-3 text-center text-slate-500 border border-slate-300">ไม่มีข้อมูลค่าใช้จ่าย</td></tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="grid grid-cols-2 gap-8 pt-8 page-break-inside-avoid">
-                    <div class="text-center p-4 border border-slate-300 rounded-xl bg-slate-50/40 space-y-10">
-                        <p class="font-bold text-slate-800">ผู้จัดทำรายงาน</p>
-                        <div class="space-y-1 text-xs">
-                            <p class="font-semibold text-slate-800">ลงชื่อ............................................................</p>
-                            <p class="text-slate-600">วันที่.........../.........../............</p>
-                        </div>
-                    </div>
-                    <div class="text-center p-4 border border-slate-300 rounded-xl bg-slate-50/40 space-y-10">
-                        <p class="font-bold text-slate-800">ผู้ตรวจสอบ / ผู้อนุมัติ</p>
-                        <div class="space-y-1 text-xs">
-                            <p class="font-semibold text-slate-800">ลงชื่อ............................................................</p>
-                            <p class="text-slate-600">วันที่.........../.........../............</p>
-                        </div>
-                    </div>
+                <div class="space-y-2">
+                    <p class="font-bold text-slate-800 text-sm">สรุปยอดรวมทางการเงิน:</p>
+                    <p class="text-xs">รายรับรวม: ฿<?= number_format($totalGeneralIncome, 2) ?> | ต้นทุนวัสดุสุทธิ: ฿<?= number_format($totalMaterialCost, 2) ?> | ค่าใช้จ่ายรวม: ฿<?= number_format($totalGeneralExpense, 2) ?> | กำไรสุทธิ: ฿<?= number_format($netProfit, 2) ?></p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Script สำหรับควบคุม Sidebar และ Modal -->
+    <!-- Script ควบคุม Sidebar และ Modal -->
     <script>
         function toggleSidebar() {
-            document.getElementById('sidebarWrapper').classList.toggle('-translate-x-full');
-            document.getElementById('sidebarBackdrop').classList.toggle('hidden');
+            const sidebar = document.getElementById('sidebarWrapper');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            sidebar.classList.toggle('-translate-x-full');
+            backdrop.classList.toggle('hidden');
         }
-
-        function openImageModal(imgSrc) {
-            document.getElementById('modalReceiptImg').src = imgSrc;
-            let modal = document.getElementById('imageModal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+        function openImageModal(url) {
+            document.getElementById('modalReceiptImg').src = url;
+            document.getElementById('imageModal').classList.remove('hidden');
+            document.getElementById('imageModal').classList.add('flex');
         }
         function closeImageModal() {
-            let modal = document.getElementById('imageModal');
-            modal.classList.remove('flex');
-            modal.classList.add('hidden');
+            document.getElementById('imageModal').classList.remove('flex');
+            document.getElementById('imageModal').classList.add('hidden');
         }
-
         function openPrintModal() {
-            let modal = document.getElementById('printReportModal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+            document.getElementById('printReportModal').classList.remove('hidden');
+            document.getElementById('printReportModal').classList.add('flex');
         }
         function closePrintModal() {
-            let modal = document.getElementById('printReportModal');
-            modal.classList.remove('flex');
-            modal.classList.add('hidden');
+            document.getElementById('printReportModal').classList.remove('flex');
+            document.getElementById('printReportModal').classList.add('hidden');
         }
     </script>
 </body>

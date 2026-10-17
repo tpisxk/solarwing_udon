@@ -35,13 +35,18 @@ $total_all_other_expenses = 0;
 $total_all_expenses = 0;
 
 try {
-    $sql_proj = "SELECT id, name, status FROM installations";
+    // ดึงค่าเฉลี่ยความคืบหน้า (progress) จากตาราง installation_tasks มาใช้งาน
+    $sql_proj = "
+        SELECT i.id, i.name, i.status, 
+               COALESCE((SELECT AVG(t.progress) FROM installation_tasks t WHERE t.installation_id = i.id), 0) AS avg_progress 
+        FROM installations i
+    ";
     $params = [];
     if ($selected_installation_id !== 'all') {
-        $sql_proj .= " WHERE id = ?";
+        $sql_proj .= " WHERE i.id = ?";
         $params[] = $selected_installation_id;
     }
-    $sql_proj .= " ORDER BY id DESC";
+    $sql_proj .= " ORDER BY i.id DESC";
 
     $stmt_projects = $pdo->prepare($sql_proj);
     $stmt_projects->execute($params);
@@ -108,6 +113,7 @@ try {
             'project_id'          => $proj_id,
             'project_name'        => $proj['name'],
             'project_status'      => $proj['status'],
+            'progress'            => floatval($proj['avg_progress']), // % ความคืบหน้าเฉลี่ยจากงานย่อย
             'out_cost'            => $out_cost,
             'in_cost'             => $in_cost,
             'net_material_cost'   => $net_material_cost,
@@ -166,21 +172,20 @@ try {
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden relative">
 
-    <!-- Sidebar: ซ่อนอัตโนมัติบนมือถือ (-translate-x-full) และแสดงปกติบนหน้าจอคอมพิวเตอร์ (lg:translate-x-0) -->
+    <!-- Sidebar -->
     <div id="sidebarWrapper" class="fixed lg:static inset-y-0 left-0 z-30 transform -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out bg-white border-r border-slate-200 w-64 flex-shrink-0 flex flex-col shadow-xl lg:shadow-none">
-        
         <div class="flex-1 overflow-y-auto">
             <?php 
             if (file_exists('sidebar_admin.php')) {
                 include 'sidebar_admin.php'; 
-            } elseif (file_exists('sidebar.php')) {
-                include 'sidebar.php';
+            } elseif (file_exists('sidebar_admin.php')) {
+                include 'sidebar_admin.php';
             }
             ?>
         </div>
     </div>
 
-    <!-- Background Overlay เฉพาะตอนเปิด Sidebar บนมือถือ -->
+    <!-- Background Overlay -->
     <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-20 hidden lg:hidden"></div>
 
     <!-- Main Content Area -->
@@ -189,13 +194,11 @@ try {
         <!-- Header -->
         <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-10 shrink-0 z-10 shadow-sm">
             <div class="flex items-center gap-3">
-                <!-- ปุ่มกดเปิด Sidebar (แสดงเฉพาะบนมือถือ/แท็บเล็ต โดยซ่อนบนคอมพิวเตอร์ด้วย lg:hidden) -->
                 <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
                     <i class="fa-solid fa-bars text-lg"></i>
                 </button>
                 <div>
                     <h2 class="text-sm md:text-xl font-bold text-slate-900 tracking-tight">รายงานค่าใช้จ่ายโครงการ</h2>
-                    <!-- <p class="text-xs text-slate-500 hidden sm:block">เลือกโครงการเพื่อตรวจสอบและออกรายงานเฉพาะโครงการได้ทันที</p> -->
                 </div>
             </div>
             <div class="flex items-center gap-2">
@@ -274,7 +277,7 @@ try {
                 </div>
             </div>
 
-            <!-- ตารางแสดงรายละเอียดแบบกดขยายได้ -->
+            <!-- ตารางแสดงรายละเอียด -->
             <div class="bg-white rounded-3xl border border-slate-200/85 shadow-sm overflow-hidden p-6 space-y-4">
                 <div class="flex items-center justify-between">
                     <div>
@@ -289,7 +292,7 @@ try {
                         <thead>
                             <tr class="border-b border-slate-200 bg-slate-50/70 text-xs font-bold text-slate-400 uppercase tracking-wider">
                                 <th class="py-4 px-4"># / โครงการ</th>
-                                <th class="py-4 px-4 text-center">สถานะ</th>
+                                <th class="py-4 px-4 text-center">สถานะ (% งาน)</th>
                                 <th class="py-4 px-4 text-right">อุปกรณ์สุทธิ</th>
                                 <th class="py-4 px-4 text-right">ค่าใช้จ่ายอื่นๆ</th>
                                 <th class="py-4 px-4 text-right">รวมใช้ไปสุทธิ</th>
@@ -299,13 +302,14 @@ try {
                         <tbody class="divide-y divide-slate-100 text-xs font-medium">
                             <?php if (!empty($project_summaries)): ?>
                                 <?php foreach ($project_summaries as $p): 
-                                    $status = $p['project_status'] ?? 'pending';
-                                    if ($status == 'completed' || $status == 'สำเร็จ') {
-                                        $badge = '<span class="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-[10px] font-bold border border-emerald-200">เสร็จสิ้น</span>';
-                                    } elseif ($status == 'in_progress' || $status == 'กำลังดำเนินการ') {
-                                        $badge = '<span class="bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full text-[10px] font-bold border border-blue-200">ดำเนินการ</span>';
+                                    // เงื่อนไขสถานะเชื่อมกับ % Work Progress โดยอัตโนมัติ
+                                    $progress = $p['progress'];
+                                    if ($progress >= 100) {
+                                        $badge = '<span class="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-[10px] font-bold border border-emerald-200">เสร็จสิ้น (100%)</span>';
+                                    } elseif ($progress > 0) {
+                                        $badge = '<span class="bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full text-[10px] font-bold border border-blue-200">กำลังดำเนินการ (' . number_format($progress, 0) . '%)</span>';
                                     } else {
-                                        $badge = '<span class="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full text-[10px] font-bold border border-amber-200">รอดำเนินการ</span>';
+                                        $badge = '<span class="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full text-[10px] font-bold border border-amber-200">รอดำเนินการ (0%)</span>';
                                     }
                                 ?>
                                     <tr class="hover:bg-slate-50 transition cursor-pointer" onclick="toggleDetails('proj-<?= $p['project_id'] ?>')">
@@ -477,54 +481,69 @@ try {
                         <div class="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center text-2xl font-bold"><i class="fa-solid fa-solar-panel"></i></div>
                         <div>
                             <h1 class="text-2xl font-bold uppercase tracking-wide text-slate-900 leading-tight">SOLARSTOCK PRO</h1>
-                            <p class="text-sm font-semibold text-slate-600">รายงานสรุปค่าใช้จ่ายและต้นทุนโครงการ (PROJECT EXPENSE & COST REPORT)</p>
+                            <p class="text-xs text-slate-500 font-medium">รายงานสรุปค่าใช้จ่ายและต้นทุนโครงการ</p>
                         </div>
                     </div>
-                    <div class="text-right">
-                        <span class="inline-block px-3 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded text-xs font-bold uppercase mb-1">OFFICIAL REPORT</span>
-                        <p class="text-xs font-semibold text-slate-500">วันที่พิมพ์: <?= date('d/m/Y H:i') ?></p>
+                    <div class="text-right text-xs text-slate-500">
+                        <div>วันที่พิมพ์: <?= date('d/m/Y H:i') ?> น.</div>
+                        <div>ผู้พิมพ์รายงาน: <?= htmlspecialchars($_SESSION['user_name'] ?? 'Admin') ?></div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm">
-                    <div><strong>มูลค่าอุปกรณ์สุทธิรวม:</strong> ฿<?= number_format($total_all_material_cost, 2) ?></div>
-                    <div><strong>ค่าใช้จ่ายอื่นๆ รวม:</strong> ฿<?= number_format($total_all_other_expenses, 2) ?></div>
-                    <div><strong>ค่าใช้จ่ายสุทธิทั้งสิ้น:</strong> ฿<?= number_format($total_all_expenses, 2) ?></div>
+                <div class="grid grid-cols-3 gap-4 border border-slate-200 p-4 rounded-xl bg-slate-50 text-center text-sm">
+                    <div>
+                        <div class="text-slate-500 text-xs font-bold">มูลค่าอุปกรณ์สุทธิรวม</div>
+                        <div class="text-emerald-700 font-bold text-lg">฿<?= number_format($total_all_material_cost, 2) ?></div>
+                    </div>
+                    <div>
+                        <div class="text-slate-500 text-xs font-bold">ค่าใช้จ่ายอื่นๆ รวม</div>
+                        <div class="text-amber-700 font-bold text-lg">฿<?= number_format($total_all_other_expenses, 2) ?></div>
+                    </div>
+                    <div>
+                        <div class="text-slate-500 text-xs font-bold">รวมค่าใช้จ่ายทั้งสิ้น</div>
+                        <div class="text-rose-700 font-bold text-lg">฿<?= number_format($total_all_expenses, 2) ?></div>
+                    </div>
                 </div>
 
-                <table class="w-full border-collapse text-sm">
+                <table class="w-full text-left border-collapse border border-slate-300 text-xs">
                     <thead>
-                        <tr class="bg-slate-800 text-white text-left">
-                            <th class="p-2.5 border border-slate-700">ชื่อโครงการ</th>
-                            <th class="p-2.5 border border-slate-700 text-center">สถานะ</th>
-                            <th class="p-2.5 border border-slate-700 text-right">อุปกรณ์สุทธิ (บาท)</th>
-                            <th class="p-2.5 border border-slate-700 text-right">ค่าใช้จ่ายอื่น (บาท)</th>
-                            <th class="p-2.5 border border-slate-700 text-right">รวมสุทธิ (บาท)</th>
+                        <tr class="bg-slate-100 text-slate-800 font-bold border-b border-slate-300">
+                            <th class="p-2 border border-slate-300"># / โครงการ</th>
+                            <th class="p-2 border border-slate-300 text-center">สถานะ (% งาน)</th>
+                            <th class="p-2 border border-slate-300 text-right">อุปกรณ์สุทธิ</th>
+                            <th class="p-2 border border-slate-300 text-right">ค่าใช้จ่ายอื่นๆ</th>
+                            <th class="p-2 border border-slate-300 text-right">รวมใช้ไปสุทธิ</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($project_summaries as $p): ?>
+                        <?php if (!empty($project_summaries)): ?>
+                            <?php foreach ($project_summaries as $p): ?>
+                                <tr class="border-b border-slate-200">
+                                    <td class="p-2 border border-slate-300 font-bold"><?= htmlspecialchars($p['project_name']) ?> (ID: #<?= $p['project_id'] ?>)</td>
+                                    <td class="p-2 border border-slate-300 text-center">
+                                        <?= $p['progress'] >= 100 ? 'เสร็จสิ้น (100%)' : ($p['progress'] > 0 ? 'กำลังดำเนินการ (' . number_format($p['progress'], 0) . '%)' : 'รอดำเนินการ (0%)') ?>
+                                    </td>
+                                    <td class="p-2 border border-slate-300 text-right">฿<?= number_format($p['net_material_cost'], 2) ?></td>
+                                    <td class="p-2 border border-slate-300 text-right">฿<?= number_format($p['other_cost'], 2) ?></td>
+                                    <td class="p-2 border border-slate-300 text-right font-bold">฿<?= number_format($p['grand_total'], 2) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php else: ?>
                             <tr>
-                                <td class="p-2.5 border border-slate-200 font-bold"><?= htmlspecialchars($p['project_name']) ?></td>
-                                <td class="p-2.5 border border-slate-200 text-center"><?= htmlspecialchars($p['project_status']) ?></td>
-                                <td class="p-2.5 border border-slate-200 text-right"><?= number_format($p['net_material_cost'], 2) ?></td>
-                                <td class="p-2.5 border border-slate-200 text-right"><?= number_format($p['other_cost'], 2) ?></td>
-                                <td class="p-2.5 border border-slate-200 text-right font-bold"><?= number_format($p['grand_total'], 2) ?></td>
+                                <td colspan="5" class="p-4 text-center border border-slate-300 text-slate-400">ไม่มีข้อมูลโครงการ</td>
                             </tr>
-                        <?php endforeach; ?>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
 
-    <!-- Script ควบคุมเปิด/ปิด Sidebar เฉพาะโหมดมือถือ -->
+    <!-- Scripts -->
     <script>
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebarWrapper');
             const overlay = document.getElementById('sidebar-overlay');
-            
-            // ควบคุมการสไลด์เปิด/ปิดเฉพาะบนมือถือ
             sidebar.classList.toggle('-translate-x-full');
             overlay.classList.toggle('hidden');
         }
@@ -532,34 +551,46 @@ try {
         function toggleDetails(rowId) {
             const detailRow = document.getElementById('detail-' + rowId);
             const icon = document.getElementById('icon-' + rowId);
-            if (detailRow.classList.contains('hidden')) {
-                detailRow.classList.remove('hidden');
-                icon.style.transform = 'rotate(90deg)';
-            } else {
-                detailRow.classList.add('hidden');
-                icon.style.transform = 'rotate(0deg)';
+            if (detailRow) {
+                detailRow.classList.toggle('hidden');
+                if (icon) {
+                    icon.classList.toggle('rotate-90');
+                }
             }
         }
 
         function openImageModal(imgSrc) {
-            document.getElementById('modalReceiptImg').src = imgSrc;
-            document.getElementById('imageModal').classList.remove('hidden');
-            document.getElementById('imageModal').classList.add('flex');
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalReceiptImg');
+            if (modal && modalImg) {
+                modalImg.src = imgSrc;
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
         }
 
         function closeImageModal() {
-            document.getElementById('imageModal').classList.remove('flex');
-            document.getElementById('imageModal').classList.add('hidden');
+            const modal = document.getElementById('imageModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
         }
 
         function openPrintModal() {
-            document.getElementById('printReportModal').classList.remove('hidden');
-            document.getElementById('printReportModal').classList.add('flex');
+            const modal = document.getElementById('printReportModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
         }
 
         function closePrintModal() {
-            document.getElementById('printReportModal').classList.remove('flex');
-            document.getElementById('printReportModal').classList.add('hidden');
+            const modal = document.getElementById('printReportModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
         }
     </script>
 </body>

@@ -1,46 +1,51 @@
 <?php
 session_start();
-header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-header("Cache-Control: post-check=0, pre-check=0", false);
-header("Pragma: no-cache");
-header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
-
 require_once '../db/conn.php';
 require_once '../auth_check.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // รับค่าที่ส่งมาจากฟอร์มในหน้า expenses.php
-    $installation_id = isset($_POST['installation_id']) && $_POST['installation_id'] !== '' ? intval($_POST['installation_id']) : null;
-    $title           = isset($_POST['title']) ? trim($_POST['title']) : '';
-    $amount          = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;
-    $category        = isset($_POST['category']) ? trim($_POST['category']) : 'ทั่วไป';
+    $installation_id = !empty($_POST['installation_id']) ? $_POST['installation_id'] : null;
+    $title = $_POST['title'] ?? '';
+    $amount = $_POST['amount'] ?? 0;
+    $category = $_POST['category'] ?? 'ทั่วไป';
+    $receipt_image_path = null;
 
-    // ตรวจสอบความถูกต้องเบื้องต้น
-    if (empty($title) || $amount <= 0) {
-        header("Location: expenses_admin.php?status=error");
-        exit();
+    // จัดการอัปโหลดรูปสลิป
+    if (isset($_FILES['receipt_image']) && $_FILES['receipt_image']['error'] === UPLOAD_ERR_OK) {
+        $file_tmp = $_FILES['receipt_image']['tmp_name'];
+        $file_name = $_FILES['receipt_image']['name'];
+        $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+        
+        // อนุญาตเฉพาะไฟล์รูปภาพ
+        $allowed_exts = ['jpg', 'jpeg', 'png', 'webp'];
+        if (in_array($file_ext, $allowed_exts)) {
+            // ตั้งชื่อไฟล์ใหม่ป้องกันชื่อซ้ำ
+            $new_file_name = 'receipt_' . uniqid() . '.' . $file_ext;
+            
+            // โฟลเดอร์เป้าหมาย (อยู่นอก admin ออกมาที่ root/uploads/receipts/)
+            $upload_dir = '../uploads/receipts/';
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0777, true);
+            }
+            
+            $destination = $upload_dir . $new_file_name;
+            
+            if (move_uploaded_file($file_tmp, $destination)) {
+                // บันทึกพาธที่จะเก็บลง DB (เช่น ../uploads/receipts/receipt_xxx.jpg)
+                $receipt_image_path = '../uploads/receipts/' . $new_file_name;
+            }
+        }
     }
 
     try {
-        // บันทึกข้อมูลค่าใช้จ่ายลงตาราง expenses (รวม installation_id)
-        $stmt = $pdo->prepare("
-            INSERT INTO expenses (installation_id, title, amount, category, created_at) 
-            VALUES (?, ?, ?, ?, NOW())
-        ");
-        $stmt->execute([$installation_id, $title, $amount, $category]);
+        // บันทึกลงตาราง expenses
+        $stmt = $pdo->prepare("INSERT INTO expenses (installation_id, title, amount, category, receipt_image, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
+        $stmt->execute([$installation_id, $title, $amount, $category, $receipt_image_path]);
 
-        // บันทึกสำเร็จ กลับไปหน้า expenses.php พร้อมแจ้งเตือน success
         header("Location: expenses_admin.php?status=success");
         exit();
-
-    } catch (Exception $e) {
-        // หากเกิดข้อผิดพลาด ให้กลับไปหน้า expenses.php พร้อมแจ้งเตือน error
+    } catch (PDOException $e) {
         header("Location: expenses_admin.php?status=error");
         exit();
     }
-} else {
-    // ถ้าไม่ได้เข้ามาด้วยวิธี POST ให้เด้งกลับหน้า expenses.php
-    header("Location: expenses_admin.php");
-    exit();
 }
-?>

@@ -40,7 +40,7 @@ $start_day_of_week   = date('w', $first_day_of_month);
 $month_start_date = sprintf('%04d-%02d-01', $year, $month);
 $month_end_date   = sprintf('%04d-%02d-%02d', $year, $month, $total_days_in_month);
 
-// ดึงรายการงานทั้งหมดในเดือน พร้อมชื่อผู้บันทึก
+// ดึงรายการงานที่คาบเกี่ยวในเดือนนี้ พร้อมชื่อผู้ใช้งาน
 $all_month_events = [];
 try {
     $stmt = $pdo->prepare("
@@ -58,15 +58,6 @@ try {
     $all_month_events = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $all_month_events = [];
-}
-
-// ดึงรายการผู้ใช้ทั้งหมดเพื่อนำไปใส่ใน Dropdown
-$usersList = [];
-try {
-    $stmt_u = $pdo->query("SELECT id, COALESCE(name, fullname, username) AS display_name FROM users ORDER BY id ASC");
-    $usersList = $stmt_u->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $usersList = [];
 }
 
 // จัดกลุ่มงานลงในแต่ละวัน
@@ -115,34 +106,36 @@ $action = $_GET['action'] ?? '';
     </style>
 </head>
 
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
+<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden relative">
 
-    <!-- Sidebar สำหรับ Desktop และ Mobile Drawer -->
-    <div id="sidebarWrapper" class="fixed inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 md:static transition-transform duration-300 ease-in-out">
-        <?php if (file_exists('sidebar_engineer.php')) include 'sidebar_engineer.php'; ?>
+    <!-- Sidebar -->
+    <div id="sidebar" class="fixed lg:static inset-y-0 left-0 z-30 transform -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out bg-white border-r border-slate-200 w-64 flex-shrink-0 flex flex-col">
+        <div class="flex-1 overflow-y-auto">
+            <?php include 'sidebar_engineer.php'; ?>
+        </div>
     </div>
 
-    <!-- Backdrop สำหรับปิด Sidebar บนมือถือ -->
-    <div id="sidebarBackdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden backdrop-blur-sm"></div>
+    <!-- Background Overlay เมื่อเปิด Sidebar บนมือถือ -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-20 hidden lg:hidden"></div>
 
+    <!-- Main Content Area -->
     <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100 w-full">
 
-        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-10 shrink-0 z-10 shadow-sm">
+        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 shrink-0 z-10 shadow-sm">
             <div class="flex items-center gap-3">
-                <button onclick="toggleSidebar()" class="md:hidden text-slate-600 hover:text-slate-900 text-xl p-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none">
-                    <i class="fa-solid fa-bars"></i>
+                <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
+                    <i class="fa-solid fa-bars text-lg"></i>
                 </button>
                 <div>
-                    <h2 class="text-base md:text-xl font-bold text-slate-900 tracking-tight">ปฏิทินงานและนัดหมาย</h2>
-                    <p class="text-[11px] md:text-xs text-slate-500 mt-0.5">จัดการและตรวจสอบตารางเวลางานติดตั้งหรือนัดหมายลูกค้า</p>
+                    <h2 class="text-lg lg:text-xl font-bold text-slate-900 tracking-tight">ปฏิทินงานและนัดหมาย</h2>
                 </div>
             </div>
-            <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 md:px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2">
-                <i class="fa-solid fa-house text-emerald-600"></i> <span class="hidden sm:inline">หน้าหลัก</span>
+            <a href="dashboard_engineer.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2 shrink-0">
+                <i class="fa-solid fa-house text-emerald-600"></i> หน้าหลัก
             </a>
         </header>
 
-        <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+        <div class="flex-1 overflow-y-auto p-4 lg:p-8 space-y-6">
 
             <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
@@ -150,41 +143,41 @@ $action = $_GET['action'] ?? '';
                     <p class="text-sm text-slate-500 mt-1">คลิกที่ช่องวันในปฏิทินเพื่อดูช่วงเวลาและจัดการงานติดตั้ง</p>
                 </div>
 
-                <div class="flex items-center gap-3 w-full md:w-auto justify-end">
-                    <div class="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs md:text-sm font-semibold">
-                        <a href="calendar_engineer.php?month=<?= $prev_month ?>&year=<?= $prev_year ?>" class="px-3 py-2 rounded-xl transition-all hover:bg-white text-slate-600">ก่อนหน้า</a>
-                        <a href="calendar_engineer.php?month=<?= date('n') ?>&year=<?= date('Y') ?>" class="px-3 py-2 rounded-xl transition-all <?= ($month == date('n') && $year == date('Y')) ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white' ?>">เดือนนี้</a>
-                        <a href="calendar_engineer.php?month=<?= $next_month ?>&year=<?= $next_year ?>" class="px-3 py-2 rounded-xl transition-all hover:bg-white text-slate-600">ถัดไป</a>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-sm font-semibold">
+                        <a href="calendar_engineer.php?month=<?= $prev_month ?>&year=<?= $prev_year ?>" class="px-4 py-2 rounded-xl transition-all hover:bg-white text-slate-600">เดือนก่อนหน้า</a>
+                        <a href="calendar_engineer.php?month=<?= date('n') ?>&year=<?= date('Y') ?>" class="px-4 py-2 rounded-xl transition-all <?= ($month == date('n') && $year == date('Y')) ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white' ?>">เดือนนี้</a>
+                        <a href="calendar_engineer.php?month=<?= $next_month ?>&year=<?= $next_year ?>" class="px-4 py-2 rounded-xl transition-all hover:bg-white text-slate-600">เดือนถัดไป</a>
                     </div>
                 </div>
             </div>
 
-            <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden p-4 md:p-6">
-                <div class="grid grid-cols-7 gap-2 md:gap-3 mb-3 text-center">
-                    <div class="text-xs md:text-sm font-bold text-rose-500 uppercase tracking-wider py-2">อา</div>
-                    <div class="text-xs md:text-sm font-bold text-slate-600 uppercase tracking-wider py-2">จ</div>
-                    <div class="text-xs md:text-sm font-bold text-slate-600 uppercase tracking-wider py-2">อ</div>
-                    <div class="text-xs md:text-sm font-bold text-slate-600 uppercase tracking-wider py-2">พ</div>
-                    <div class="text-xs md:text-sm font-bold text-slate-600 uppercase tracking-wider py-2">พฤ</div>
-                    <div class="text-xs md:text-sm font-bold text-slate-600 uppercase tracking-wider py-2">ศ</div>
-                    <div class="text-xs md:text-sm font-bold text-slate-600 uppercase tracking-wider py-2">ส</div>
+            <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden p-4 lg:p-6">
+                <div class="grid grid-cols-7 gap-2 lg:gap-3 mb-3 text-center">
+                    <div class="text-xs lg:text-sm font-bold text-rose-500 uppercase tracking-wider py-2">อาทิตย์</div>
+                    <div class="text-xs lg:text-sm font-bold text-slate-600 uppercase tracking-wider py-2">จันทร์</div>
+                    <div class="text-xs lg:text-sm font-bold text-slate-600 uppercase tracking-wider py-2">อังคาร</div>
+                    <div class="text-xs lg:text-sm font-bold text-slate-600 uppercase tracking-wider py-2">พุธ</div>
+                    <div class="text-xs lg:text-sm font-bold text-slate-600 uppercase tracking-wider py-2">พฤหัสฯ</div>
+                    <div class="text-xs lg:text-sm font-bold text-slate-600 uppercase tracking-wider py-2">ศุกร์</div>
+                    <div class="text-xs lg:text-sm font-bold text-slate-600 uppercase tracking-wider py-2">เสาร์</div>
                 </div>
 
-                <div class="grid grid-cols-7 gap-2 md:gap-3">
+                <div class="grid grid-cols-7 gap-2 lg:gap-3">
                     <?php for ($i = 0; $i < $start_day_of_week; $i++): ?>
-                        <div class="h-28 md:h-36 bg-slate-50/50 rounded-2xl border border-slate-100 opacity-40"></div>
+                        <div class="h-28 lg:h-36 bg-slate-50/50 rounded-2xl border border-slate-100 opacity-40"></div>
                     <?php endfor;
 
                     for ($day = 1; $day <= $total_days_in_month; $day++):
-                        $current_date_str = sprintf('%04d-%02d-%02d', $year, $month,$day);
-                        $is_today = ($current_date_str == date('Y-m-d'));
-                        $day_events =$events_by_date[$current_date_str] ?? [];$formatted_date_str = $day . ' ' .$thai_months[$month] . ' ' .$thai_year;
+                        $current_date_str = sprintf('%04d-%02d-%02d', $year, $month, $day);
+                        $is_today = ($current_date_str == date('d-m-Y', strtotime(date('d-m-Y'))));
+                        $day_events = $events_by_date[$current_date_str] ?? [];$formatted_date_str = $day . ' ' .$thai_months[$month] . ' ' .$thai_year;
                     ?>
                         <div onclick="openDayModal('<?= $current_date_str ?>', '<?= $formatted_date_str ?>')"
-                            class="h-28 md:h-36 bg-white rounded-2xl border <?= $is_today ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200' ?> p-2.5 md:p-3 flex flex-col justify-between hover:border-emerald-600 hover:shadow-md transition-all cursor-pointer relative overflow-hidden group">
+                            class="h-28 lg:h-36 bg-white rounded-2xl border <?= $is_today ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200' ?> p-2 lg:p-3 flex flex-col justify-between hover:border-emerald-600 hover:shadow-md transition-all cursor-pointer relative overflow-hidden group">
 
                             <div class="flex items-center justify-between">
-                                <span class="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-xl text-xs md:text-sm font-bold <?= $is_today ? 'bg-brandGreen text-white shadow-sm' : 'text-slate-700 group-hover:bg-emerald-50 group-hover:text-emerald-700' ?>">
+                                <span class="w-7 h-7 lg:w-8 lg:h-8 flex items-center justify-center rounded-xl text-xs lg:text-sm font-bold <?= $is_today ? 'bg-brandGreen text-white shadow-sm' : 'text-slate-700 group-hover:bg-emerald-50 group-hover:text-emerald-700' ?>">
                                     <?= $day ?>
                                 </span>
                                 <?php if (!empty($day_events)): ?>
@@ -192,29 +185,31 @@ $action = $_GET['action'] ?? '';
                                 <?php endif; ?>
                             </div>
 
-                            <div class="flex-1 overflow-y-auto space-y-1 mt-1 md:mt-2">
-                                <?php foreach (array_slice($day_events, 0, 2) as $ev):$status_ev = $ev['status'] ?? 'pending';$badge_class = match ($status_ev) {
+                            <div class="flex-1 overflow-y-auto space-y-1 mt-1 lg:mt-2">
+                                <?php foreach (array_slice($day_events, 0, 3) as$ev):
+                                    $status_ev =$ev['status'] ?? 'pending';
+                                    $badge_class = match ($status_ev) {
                                         'in_progress' => 'bg-blue-100 text-blue-800 border-blue-300',
                                         'completed'   => 'bg-emerald-100 text-emerald-800 border-emerald-300',
                                         'cancelled'   => 'bg-rose-100 text-rose-800 border-rose-300',
                                         default       => 'bg-amber-100 text-amber-800 border-amber-300',
-                                    };$time_display = !empty($ev['start_time']) ? substr($ev['start_time'], 0, 5) : '';
-                                    $u_name =$ev['user_name'] ?? '';
+                                    };
+                                    $time_display = !empty($ev['start_time']) ? substr($ev['start_time'], 0, 5) : '';$team_label = !empty($ev['installation_team']) ? ' [ทีม ' . $ev['installation_team'] . ']' : '';
                                 ?>
-                                    <div class="<?= $badge_class ?> text-[10px] md:text-[11px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded-lg truncate border shadow-2xs flex items-center justify-between gap-1">
+                                    <div class="<?= $badge_class ?> text-[10px] lg:text-[11px] font-bold px-1.5 lg:px-2 py-1 rounded-lg truncate border shadow-2xs flex items-center justify-between gap-1">
                                         <div class="flex items-center gap-1 truncate">
                                             <?php if ($time_display): ?><span class="opacity-75 shrink-0"><?= $time_display ?></span><?php endif; ?>
-                                            <span class="truncate"><?= htmlspecialchars($ev['title'], ENT_QUOTES, 'UTF-8') ?></span>
+                                            <span class="truncate"><?= htmlspecialchars($ev['title'] .$team_label, ENT_QUOTES, 'UTF-8') ?></span>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
-                                <?php if (count($day_events) > 2): ?>
-                                    <div class="text-[9px] md:text-[10px] text-slate-400 font-bold px-1">+ อีก <?= count($day_events) - 2 ?> รายการ</div>
+                                <?php if (count($day_events) > 3): ?>
+                                    <div class="text-[10px] text-slate-400 font-bold px-1">+ อีก <?= count($day_events) - 3 ?> รายการ</div>
                                 <?php endif; ?>
                             </div>
 
-                            <div class="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity hidden md:block">
-                                <span class="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] shadow-md">
+                            <div class="absolute bottom-2 right-2 lg:bottom-3 lg:right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span class="w-6 h-6 lg:w-7 lg:h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs shadow-md">
                                     <i class="fa-solid fa-plus"></i>
                                 </span>
                             </div>
@@ -225,7 +220,7 @@ $action = $_GET['action'] ?? '';
                     $remaining_cells = (7 - ($total_cells % 7)) % 7;
                     for ($i = 0; $i < $remaining_cells; $i++):
                     ?>
-                        <div class="h-28 md:h-36 bg-slate-50/50 rounded-2xl border border-slate-100 opacity-40"></div>
+                        <div class="h-28 lg:h-36 bg-slate-50/50 rounded-2xl border border-slate-100 opacity-40"></div>
                     <?php endfor; ?>
                 </div>
             </div>
@@ -235,12 +230,12 @@ $action = $_GET['action'] ?? '';
 
     <!-- Modal จัดการนัดหมาย -->
     <div id="dayModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl max-w-lg w-full p-6 md:p-8 shadow-2xl border border-slate-200 space-y-6 transform transition-all max-h-[90vh] overflow-y-auto">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 lg:p-8 shadow-2xl border border-slate-200 space-y-6 transform transition-all max-h-[90vh] overflow-y-auto">
 
             <div class="flex items-center justify-between border-b border-slate-100 pb-4">
                 <div>
-                    <h3 id="modalTitle" class="text-base md:text-lg font-bold text-slate-900">รายการนัดหมายประจำวัน</h3>
-                    <p class="text-xs md:text-sm text-slate-500" id="modalDateSubtitle">วันที่เลือก</p>
+                    <h3 id="modalTitle" class="text-base lg:text-lg font-bold text-slate-900">รายการนัดหมายประจำวัน</h3>
+                    <p class="text-xs lg:text-sm text-slate-500" id="modalDateSubtitle">วันที่เลือก</p>
                 </div>
                 <button onclick="closeModal()" class="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-sm">
                     <i class="fa-solid fa-xmark"></i>
@@ -262,45 +257,51 @@ $action = $_GET['action'] ?? '';
                 </div>
 
                 <div class="space-y-1.5">
-                    <label class="block text-xs md:text-sm font-semibold text-slate-700">หัวข้อ / ชื่องาน</label>
-                    <input type="text" id="inputTitle" name="title" required placeholder="เช่น ติดตั้งแผงโซล่าเซลล์..." class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs md:text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
+                    <label class="block text-sm font-semibold text-slate-700">หัวข้อ / ชื่องาน</label>
+                    <input type="text" id="inputTitle" name="title" required placeholder="เช่น ติดตั้งแผงโซล่าเซลล์..." class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
+                </div>
+
+                <!-- เลือกทีมติดตั้งได้สูงสุด 3 ทีมพร้อมกัน (ใช้ Checkbox) -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-semibold text-slate-700">ทีมติดตั้ง (เลือกได้มากกว่า 1 ทีม)</label>
+                    <div class="flex items-center gap-6 bg-slate-50/50 border border-slate-200 p-3.5 rounded-2xl">
+                        <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
+                            <input type="checkbox" name="installation_team[]" value="W1" class="team-checkbox w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"> ทีม W1
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
+                            <input type="checkbox" name="installation_team[]" value="W2" class="team-checkbox w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"> ทีม W2
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
+                            <input type="checkbox" name="installation_team[]" value="W3" class="team-checkbox w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"> ทีม W3
+                        </label>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="space-y-1.5">
+                        <label class="block text-sm font-semibold text-slate-700">วันเริ่มต้น</label>
+                        <input type="date" id="inputStartDate" name="start_date" required onchange="validateDates()" class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="block text-sm font-semibold text-slate-700">วันสิ้นสุด</label>
+                        <input type="date" id="inputEndDate" name="end_date" required onchange="validateDates()" class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="space-y-1.5">
+                        <label class="block text-sm font-semibold text-slate-700">เวลาเริ่มต้น</label>
+                        <input type="time" id="inputStartTime" name="start_time" value="09:00" required class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="block text-sm font-semibold text-slate-700">เวลาสิ้นสุด</label>
+                        <input type="time" id="inputEndTime" name="end_time" value="12:00" required class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
+                    </div>
                 </div>
 
                 <div class="space-y-1.5">
-                    <label class="block text-xs md:text-sm font-semibold text-slate-700">ผู้รับผิดชอบ / ผู้ลงงาน</label>
-                    <select id="inputUserId" name="user_id" class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs md:text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
-                        <option value="">-- ใช้ผู้ใช้งานปัจจุบันที่ล็อกอิน --</option>
-                        <?php foreach ($usersList as$usr): ?>
-                            <option value="<?= $usr['id'] ?>"><?= htmlspecialchars($usr['display_name'], ENT_QUOTES, 'UTF-8') ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="space-y-1.5">
-                        <label class="block text-xs md:text-sm font-semibold text-slate-700">วันเริ่มต้น</label>
-                        <input type="date" id="inputStartDate" name="start_date" required onchange="validateDates()" class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs md:text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="block text-xs md:text-sm font-semibold text-slate-700">วันสิ้นสุด</label>
-                        <input type="date" id="inputEndDate" name="end_date" required onchange="validateDates()" class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs md:text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="space-y-1.5">
-                        <label class="block text-xs md:text-sm font-semibold text-slate-700">เวลาเริ่มต้น</label>
-                        <input type="time" id="inputStartTime" name="start_time" value="09:00" required class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs md:text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="block text-xs md:text-sm font-semibold text-slate-700">เวลาสิ้นสุด</label>
-                        <input type="time" id="inputEndTime" name="end_time" value="12:00" required class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs md:text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
-                    </div>
-                </div>
-
-                <div class="space-y-1.5">
-                    <label class="block text-xs md:text-sm font-semibold text-slate-700">สถานะงาน</label>
-                    <select id="inputStatus" name="status" class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs md:text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
+                    <label class="block text-sm font-semibold text-slate-700">สถานะงาน</label>
+                    <select id="inputStatus" name="status" class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
                         <option value="pending">รอดำเนินการ (Pending)</option>
                         <option value="in_progress">กำลังดำเนินการ (In Progress)</option>
                         <option value="completed">เสร็จสิ้น (Completed)</option>
@@ -309,13 +310,13 @@ $action = $_GET['action'] ?? '';
                 </div>
 
                 <div class="space-y-1.5">
-                    <label class="block text-xs md:text-sm font-semibold text-slate-700">รายละเอียดเพิ่มเติม</label>
-                    <textarea id="inputDetails" name="details" rows="2" placeholder="สถานที่, อุปกรณ์..." class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs md:text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium"></textarea>
+                    <label class="block text-sm font-semibold text-slate-700">รายละเอียดเพิ่มเติม</label>
+                    <textarea id="inputDetails" name="details" rows="2" placeholder="สถานที่, อุปกรณ์..." class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium"></textarea>
                 </div>
 
                 <div class="flex justify-end gap-3 pt-2">
-                    <button type="button" onclick="closeModal()" class="px-5 py-2.5 rounded-2xl text-xs md:text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all">ปิด</button>
-                    <button type="submit" id="submitBtn" class="bg-brandGreen hover:bg-emerald-700 text-white px-6 py-2.5 rounded-2xl text-xs md:text-sm font-semibold shadow-md shadow-emerald-600/20 transition-all">บันทึกนัดหมาย</button>
+                    <button type="button" onclick="closeModal()" class="px-5 py-2.5 rounded-2xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all">ปิด</button>
+                    <button type="submit" id="submitBtn" class="bg-brandGreen hover:bg-emerald-700 text-white px-6 py-2.5 rounded-2xl text-sm font-semibold shadow-md shadow-emerald-600/20 transition-all">บันทึกนัดหมาย</button>
                 </div>
             </form>
         </div>
@@ -372,12 +373,11 @@ $action = $_GET['action'] ?? '';
         let deleteTargetId = null;
         let currentSelectedDate = null;
 
-        // ฟังก์ชันเปิด-ปิด Sidebar สำหรับมือถือ
         function toggleSidebar() {
-            const sidebar = document.getElementById('sidebarWrapper');
-            const backdrop = document.getElementById('sidebarBackdrop');
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
             sidebar.classList.toggle('-translate-x-full');
-            backdrop.classList.toggle('hidden');
+            overlay.classList.toggle('hidden');
         }
 
         function escapeHtml(text) {
@@ -416,12 +416,20 @@ $action = $_GET['action'] ?? '';
             if (allEvents[dateStr] && allEvents[dateStr].length > 0) {
                 allEvents[dateStr].forEach(ev => {
                     let startTime = ev.start_time ? ev.start_time.substring(0, 5) : '';
-                    let endTime = ev.end_time ? ' - ' + ev.end_time.substring(0, 5) : '';
+                    let endTime = ev.end_time ? ' ถึง ' + ev.end_time.substring(0, 5) : '';
                     let statusBadge = matchStatusBadge(ev.status || 'pending');
                     let sDate = ev.start_date;
                     let eDate = ev.actual_end_date;
                     let dateRangeText = (sDate === eDate) ? sDate : `${sDate} ถึง ${eDate}`;
                     let userName = ev.user_name || 'ไม่ระบุผู้ลงงาน';
+                    
+                    let teamBadge = '';
+                    if (ev.installation_team) {
+                        let teams = ev.installation_team.split(',');
+                        teams.forEach(t => {
+                            teamBadge += `<span class="bg-indigo-100 text-indigo-800 border border-indigo-300 px-2 py-0.5 rounded-full text-[10px] font-bold ml-1"><i class="fa-solid fa-users mr-1"></i>ทีม ${escapeHtml(t.trim())}</span>`;
+                        });
+                    }
 
                     let itemDiv = document.createElement('div');
                     itemDiv.className = 'bg-slate-50 border border-slate-200/80 p-4 rounded-2xl space-y-2';
@@ -434,11 +442,14 @@ $action = $_GET['action'] ?? '';
                             </span>
                             ${statusBadge}
                         </div>
-                        <h5 class="text-sm font-bold text-slate-900">${escapeHtml(ev.title)}</h5>
+                        <div class="flex items-center justify-between flex-wrap gap-1">
+                            <h5 class="text-sm font-bold text-slate-900">${escapeHtml(ev.title)}</h5>
+                            <div>${teamBadge}</div>
+                        </div>
                         <p class="text-xs text-slate-500">${escapeHtml(ev.details || 'ไม่มีรายละเอียดเพิ่มเติม')}</p>
                         
                         <div class="text-xs text-slate-600 bg-white p-2 rounded-xl border border-slate-200/60 flex items-center justify-between mt-1">
-                            <span class="font-medium text-slate-500"><i class="fa-solid fa-user-check text-emerald-600 mr-1.5"></i> ผู้รับผิดชอบ:</span>
+                            <span class="font-medium text-slate-500"><i class="fa-solid fa-user-check text-emerald-600 mr-1.5"></i> ผู้รับผิดชอบ</span>
                             <span class="font-bold text-slate-800">${escapeHtml(userName)}</span>
                         </div>
 
@@ -472,7 +483,18 @@ $action = $_GET['action'] ?? '';
 
             document.getElementById('formEventId').value = ev.id;
             document.getElementById('inputTitle').value = ev.title || '';
-            document.getElementById('inputUserId').value = ev.user_id || '';
+            
+            // เคลียร์ค่า Checkbox ทีมติดตั้งทั้งหมดก่อน
+            document.querySelectorAll('.team-checkbox').forEach(cb => cb.checked = false);
+            // ติ๊กเลือกตามข้อมูลที่มี
+            if (ev.installation_team) {
+                let teams = ev.installation_team.split(',');
+                teams.forEach(t => {
+                    let cb = document.querySelector(`.team-checkbox[value="${t.trim()}"]`);
+                    if (cb) cb.checked = true;
+                });
+            }
+
             document.getElementById('inputStartDate').value = ev.start_date || currentSelectedDate;
             document.getElementById('inputEndDate').value = ev.actual_end_date || ev.start_date || currentSelectedDate;
             document.getElementById('inputStartTime').value = ev.start_time ? ev.start_time.substring(0, 5) : '09:00';
@@ -490,7 +512,7 @@ $action = $_GET['action'] ?? '';
         function resetFormToCreate() {
             document.getElementById('formEventId').value = '';
             document.getElementById('inputTitle').value = '';
-            document.getElementById('inputUserId').value = '';
+            document.querySelectorAll('.team-checkbox').forEach(cb => cb.checked = false);
             document.getElementById('inputStartDate').value = currentSelectedDate || '';
             document.getElementById('inputEndDate').value = currentSelectedDate || '';
             document.getElementById('inputStartTime').value = '09:00';
@@ -512,17 +534,15 @@ $action = $_GET['action'] ?? '';
             document.getElementById('deleteConfirmModal').classList.remove('hidden');
         }
 
-        function closeDeleteModal() {
-            deleteTargetId = null;
-            document.getElementById('deleteConfirmModal').classList.add('hidden');
+        function executeDelete() {
+            if (!deleteTargetId) return;
+            showLoadingPopup();
+            window.location.href = 'calendar_process.php?action=delete&id=' + deleteTargetId + '&redirect_month=<?= $month ?>&redirect_year=<?= $year ?>';
         }
 
-        function executeDelete() {
-            if (deleteTargetId) {
-                document.getElementById('deleteConfirmModal').classList.add('hidden');
-                document.getElementById('loadingPopup').classList.remove('hidden');
-                window.location.href = `calendar_delete.php?delete_id=${deleteTargetId}&month=<?= $month ?>&year=<?= $year ?>&csrf_token=<?= $_SESSION['csrf_token'] ?>`;
-            }
+        function closeDeleteModal() {
+            document.getElementById('deleteConfirmModal').classList.add('hidden');
+            deleteTargetId = null;
         }
 
         function closeModal() {
@@ -531,13 +551,14 @@ $action = $_GET['action'] ?? '';
 
         function closeSuccessPopup() {
             const popup = document.getElementById('successPopup');
-            if (popup) popup.remove();
+            if (popup) {
+                popup.remove();
+            }
             const url = new URL(window.location.href);
             url.searchParams.delete('status');
             url.searchParams.delete('action');
-            window.history.replaceState({}, document.title, url);
+            window.history.replaceState({}, document.title, url.toString());
         }
     </script>
 </body>
-
 </html>

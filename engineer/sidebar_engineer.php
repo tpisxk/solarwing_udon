@@ -59,7 +59,7 @@ try {
         <!-- Header โลโก้ -->
         <div id="sidebarHeader" class="h-20 flex items-center px-6 border-b border-slate-800/80 gap-3 transition-colors duration-200">
             <img src="../Pic/SW.png" alt="SW.png" class="w-8 h-8 object-contain">
-            <h1 id="sidebarTitle" class="text-white font-bold text-lg tracking-tight">SolarWing <span class="text-emerald-500">Management</span></h1>
+            <h1 id="sidebarTitle" class="text-white font-bold text-lg tracking-tight">SolarWing <span class="text-emerald-500">Engineer</span></h1>
         </div>
 
         <!-- รายการเมนู -->

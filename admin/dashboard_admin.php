@@ -2,7 +2,7 @@
 session_start();
 require_once '../db/conn.php';
 require_once '../auth_check.php';
-$current_page = 'dashboard';
+$current_page = 'dashboard_admin';
 
 $total_items = $total_qty = $total_value = $total_project_cost = 0;
 $low_stock_count = $out_of_stock_count = $normal_stock_count = 0;
@@ -13,8 +13,8 @@ try {
     $stmt = $pdo->query("
         SELECT 
             COUNT(*) as total_items,
-            COALESCE(SUM(stock_quantity), 0) as total_qty,
-            COALESCE(SUM(stock_quantity * cost_price), 0) as total_value,
+            COALESCE(SUM(GREATEST(stock_quantity, 0)), 0) as total_qty,
+            COALESCE(SUM(GREATEST(stock_quantity, 0) * cost_price), 0) as total_value,
             SUM(CASE WHEN stock_quantity <= 0 THEN 1 ELSE 0 END) as out_count,
             SUM(CASE WHEN stock_quantity > 0 AND stock_quantity <= 5 THEN 1 ELSE 0 END) as low_count,
             SUM(CASE WHEN stock_quantity > 5 THEN 1 ELSE 0 END) as normal_count
@@ -23,13 +23,20 @@ try {
     $stats = $stmt->fetch(PDO::FETCH_ASSOC);
     extract($stats);
 
-    // 2. ดึงสินค้า 6 อันดับแรกสำหรับทำกราฟ
-    $chart_products = $pdo->query("SELECT name, stock_quantity FROM products ORDER BY stock_quantity DESC LIMIT 6")->fetchAll(PDO::FETCH_ASSOC);
+    // 2. ดึงสินค้า 6 อันดับแรกสำหรับทำกราฟ (ป้องกันค่าติดลบด้วย GREATEST)
+    $chart_products = $pdo->query("SELECT name, GREATEST(stock_quantity, 0) AS stock_quantity FROM products ORDER BY stock_quantity DESC LIMIT 6")->fetchAll(PDO::FETCH_ASSOC);
 
-    // 3. ดึงรายการโครงการ คำนวณค่าอุปกรณ์เบิกใช้ออกสุทธิ + ค่าใช้จ่ายอื่นๆ (expenses) ใน Query เดียว
+    // 3. ดึงรายการโครงการ คำนวณค่าใช้จ่าย และประเมินสถานะอัตโนมัติตามค่าเฉลี่ย Actual Progress ของงานย่อย
     $stmt_install = $pdo->query("
         SELECT 
-            i.id, i.name, i.status,
+            i.id, i.name,
+            COALESCE(t.avg_progress, 0) AS avg_progress,
+            CASE 
+                COALESCE(t.avg_progress, 0)
+                WHEN 0 THEN 'pending'
+                WHEN 100 THEN 'completed'
+                ELSE 'in_progress'
+            END AS calculated_status,
             (
                 COALESCE(SUM(CASE WHEN s.type = 'out' THEN s.quantity * p.cost_price ELSE 0 END), 0) -
                 COALESCE(SUM(CASE WHEN s.type = 'in' THEN s.quantity * p.cost_price ELSE 0 END), 0) +
@@ -42,13 +49,17 @@ try {
             SELECT installation_id, SUM(amount) AS total_exp 
             FROM expenses GROUP BY installation_id
         ) e ON i.id = e.installation_id
+        LEFT JOIN (
+            SELECT installation_id, AVG(progress) AS avg_progress
+            FROM installation_tasks GROUP BY installation_id
+        ) t ON i.id = t.installation_id
         GROUP BY i.id ORDER BY i.id DESC
     ");
     $installations_list = $stmt_install->fetchAll(PDO::FETCH_ASSOC);
     $total_project_cost = array_sum(array_column($installations_list, 'total_cost'));
 
-    // 4. ดึงสินค้าใกล้หมดสต็อก (<= 5 ชิ้น)
-    $low_stock_products = $pdo->query("SELECT sku, name, category, stock_quantity FROM products WHERE stock_quantity <= 5 ORDER BY stock_quantity ASC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
+    // 4. ดึงสินค้าใกล้หมดสต็อก (<= 5 ชิ้น) พร้อมป้องกันค่าติดลบ
+    $low_stock_products = $pdo->query("SELECT sku, name, category, GREATEST(stock_quantity, 0) AS stock_quantity FROM products WHERE stock_quantity <= 5 ORDER BY stock_quantity ASC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
     $db_error = $e->getMessage();
@@ -62,7 +73,7 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - SolarStock Pro</title>
+    <title>Admin Dashboard - SolarStock</title>
     <link rel="icon" type="image/png" href="../Pic/456456.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -74,34 +85,28 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden relative">
 
-    <!-- Sidebar พร้อมคลาสสำหรับซ่อน/แสดง -->
+    <!-- Sidebar -->
     <div id="sidebar" class="fixed lg:static inset-y-0 left-0 z-30 transform -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out bg-white border-r border-slate-200 w-64 flex-shrink-0 flex flex-col">
        <div class="flex-1 overflow-y-auto">
             <?php if (file_exists('sidebar_admin.php')) include 'sidebar_admin.php'; ?>
         </div>
     </div>
 
-    <!-- Background Overlay เมื่อเปิด Sidebar บนมือถือ -->
+    <!-- Background Overlay -->
     <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-20 hidden lg:hidden"></div>
 
     <main class="flex-1 flex flex-col h-full overflow-hidden w-full">
         <!-- Header -->
         <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 shrink-0 shadow-sm z-10">
             <div class="flex items-center gap-3">
-                <!-- ปุ่มเปิด Sidebar บนมือถือ -->
                 <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
                     <i class="fa-solid fa-bars text-lg"></i>
                 </button>
-                
-                <!-- <span class="relative flex h-3 w-3">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                </span> -->
                 <div>
                     <h2 class="text-base lg:text-xl font-bold text-slate-900 truncate">ภาพรวมคลังสินค้าและค่าใช้จ่ายโครงการ</h2>
                 </div>
             </div>
-            <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2 shrink-0">
+            <a href="dashboard_admin.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2 shrink-0">
                 <i class="fa-solid fa-house text-emerald-600"></i> หน้าหลัก
             </a>
         </header>
@@ -116,7 +121,7 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
 
             <!-- สถิติภาพรวม 4 Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm hover:-translate-y-1 transition group">
+                <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-xs font-bold text-slate-400 uppercase">รายการสินค้าทั้งหมด</p>
@@ -126,7 +131,7 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
                     </div>
                 </div>
 
-                <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm hover:-translate-y-1 transition group">
+                <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-xs font-bold text-slate-400 uppercase">มูลค่าสต็อกรวม</p>
@@ -136,7 +141,7 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
                     </div>
                 </div>
 
-                <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm hover:-translate-y-1 transition group">
+                <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-xs font-bold text-slate-400 uppercase">ค่าใช้จ่ายโครงการรวม</p>
@@ -146,7 +151,7 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
                     </div>
                 </div>
 
-                <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm hover:-translate-y-1 transition group">
+                <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-xs font-bold text-slate-400 uppercase">สินค้าใกล้หมด / หมด</p>
@@ -176,29 +181,44 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
 
             <!-- ตารางข้อมูล -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- ตารางโครงการ -->
+                <!-- ตารางโครงการ แสดงสถานะอัตโนมัติ -->
                 <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 space-y-4">
-                    <h3 class="text-base font-bold text-slate-900"><i class="fa-solid fa-clipboard-list text-brandGreen me-2"></i>โครงการที่กำลังดำเนินงาน</h3>
+                    <h3 class="text-base font-bold text-slate-900"><i class="fa-solid fa-clipboard-list text-brandGreen me-2"></i>โครงการและความคืบหน้า</h3>
                     <div class="max-h-72 overflow-y-auto">
                         <table class="w-full text-left border-collapse text-xs">
                             <thead class="sticky top-0 bg-white border-b border-slate-100 font-bold text-slate-400 uppercase">
                                 <tr>
-                                    <th class="py-2.5 px-3">โครงการ</th>
-                                    <th class="py-2.5 px-3 text-right">ค่าใช้จ่ายจริง</th>
-                                    <th class="py-2.5 px-3 text-center">สถานะ</th>
+                                    <th class="py-2.5 px-3">ชื่อโครงการ</th>
+                                    <th class="py-2.5 px-3 text-center">ความคืบหน้า</th>
+                                    <th class="py-2.5 px-3 text-center">สถานะอัตโนมัติ</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
                                 <?php if ($installations_list): foreach ($installations_list as $item): 
-                                    $st = $item['status'] ?? 'pending';
-                                    $badge = ($st == 'completed' || $st == 'สำเร็จ') ? '<span class="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap">เสร็จสิ้น</span>' :
-                                            (($st == 'in_progress' || $st == 'กำลังดำเนินการ') ? '<span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap">ดำเนินการ</span>' :
-                                            '<span class="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap">รอดำเนินการ</span>');
+                                    $st = $item['calculated_status'];
+                                    $progress = round($item['avg_progress']);
+                                    
+                                    if ($st == 'completed') {
+                                        $badge = '<span class="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap">เสร็จสิ้น (100%)</span>';
+                                    } elseif ($st == 'in_progress') {
+                                        $badge = '<span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap">ดำเนินการ (' . $progress . '%)</span>';
+                                    } else {
+                                        $badge = '<span class="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap">รอดำเนินการ (0%)</span>';
+                                    }
                                 ?>
-                                    <tr class="hover:bg-slate-50">
-                                        <td class="py-3 px-3 font-bold text-slate-900"><?= htmlspecialchars($item['name']) ?></td>
-                                        <td class="py-3 px-3 text-right font-semibold text-emerald-600">฿<?= number_format($item['total_cost'], 2) ?></td>
-                                        <td class="py-3 px-3 text-center"><?= $badge ?></td>
+                                    <tr class="hover:bg-slate-50 transition-all">
+                                        <td class="py-3 px-3 font-bold text-slate-900">
+                                            <?= htmlspecialchars($item['name']) ?>
+                                        </td>
+                                        <td class="py-3 px-3 text-center font-semibold text-slate-600">
+                                            <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                                                <div class="bg-emerald-500 h-full rounded-full" style="width: <?= $progress ?>%;"></div>
+                                            </div>
+                                            <span class="text-[10px] text-slate-400 mt-0.5 inline-block"><?= $progress ?>%</span>
+                                        </td>
+                                        <td class="py-3 px-3 text-center">
+                                            <?= $badge ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; else: ?>
                                     <tr><td colspan="3" class="text-center py-6 text-slate-400">ไม่มีข้อมูลโครงการ</td></tr>
@@ -208,7 +228,7 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
                     </div>
                 </div>
 
-                <!-- ตารางสินค้าใกล้หมด -->
+                <!-- ตารางสินค้าใกล้หมด (ป้องกันค่าติดลบ) -->
                 <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 space-y-4">
                     <h3 class="text-base font-bold text-slate-900"><i class="fa-solid fa-triangle-exclamation text-rose-500 me-2"></i> สินค้าใกล้หมด / ต้องเติมสต็อก</h3>
                     <div class="max-h-72 overflow-y-auto">
@@ -221,11 +241,13 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
-                                <?php if ($low_stock_products): foreach ($low_stock_products as $prod): ?>
+                                <?php if ($low_stock_products): foreach ($low_stock_products as $prod): 
+                                    $safe_qty = max(0, intval($prod['stock_quantity']));
+                                ?>
                                     <tr class="hover:bg-slate-50">
                                         <td class="py-3 px-3 font-bold text-slate-900"><?= htmlspecialchars($prod['name']) ?></td>
                                         <td class="py-3 px-3 text-slate-500"><?= htmlspecialchars($prod['category'] ?? '-') ?></td>
-                                        <td class="py-3 px-3 text-right font-extrabold text-rose-600"><?= number_format($prod['stock_quantity']) ?> ชิ้น</td>
+                                        <td class="py-3 px-3 text-right font-extrabold text-rose-600"><?= number_format($safe_qty) ?> ชิ้น</td>
                                     </tr>
                                 <?php endforeach; else: ?>
                                     <tr><td colspan="3" class="text-center py-6 text-slate-400">ไม่มีสินค้าใกล้หมด</td></tr>
@@ -239,7 +261,6 @@ $chart_data = array_map('intval', array_column($chart_products, 'stock_quantity'
     </main>
 
     <script>
-        // ควบคุมสำหรับมือถือ (Slide เปิด-ปิด)
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebar-overlay');

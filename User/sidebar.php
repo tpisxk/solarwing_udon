@@ -3,13 +3,15 @@
 $current_page = basename($_SERVER['PHP_SELF'], ".php");
 
 $display_name = $_SESSION['name'] ?? '';
-$display_role = $_SESSION['role'] ?? $_SESSION['user_role'] ?? 'Admin';
-// นับจำนวนผู้ใช้งานทั้งหมดในตาราง users
+$display_role = $_SESSION['role'] ?? $_SESSION['user_role'] ?? 'User';
+$user_id = $_SESSION['user_id'] ?? null;
+
+// นับจำนวนใบเบิกทั้งหมดที่แอดมิน "อนุมัติแล้ว (Approved)" เพื่อแสดงแจ้งเตือนที่ Sidebar
 try {
-    $stmt_user_count = $pdo->query("SELECT COUNT(*) FROM users");
-    $user_count = $stmt_user_count->fetchColumn();
+    $stmt_approved_count = $pdo->query("SELECT COUNT(*) FROM requisitions WHERE status = 'Approved'");
+    $approved_requisitions_count = $stmt_approved_count->fetchColumn();
 } catch (PDOException $e) {
-    $user_count = 0; // เผื่อกรณีเกิด Error ให้แสดงเป็น 0
+    $approved_requisitions_count = 0; // เผื่อกรณีเกิด Error ให้แสดงเป็น 0
 }
 ?>
 <!-- 🌐 ส่วนเมนูด้านซ้าย (Sidebar) -->
@@ -59,7 +61,7 @@ try {
         <!-- Header โลโก้ -->
         <div id="sidebarHeader" class="h-20 flex items-center px-6 border-b border-slate-800/80 gap-3 transition-colors duration-200">
             <img src="../Pic/SW.png" alt="SW.png" class="w-8 h-8 object-contain">
-            <h1 id="sidebarTitle" class="text-white font-bold text-lg tracking-tight">SolarWing <span class="text-emerald-500">Stock</span></h1>
+            <h1 id="sidebarTitle" class="text-white font-bold text-lg tracking-tight">SolarWing <span class="text-emerald-500">Management</span></h1>
         </div>
 
         <!-- รายการเมนู -->
@@ -70,9 +72,21 @@ try {
             <a href="calendar.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'calendar') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
                 <i class="fas fa-calendar-alt w-5 text-center text-sm"></i> Calendar (ปฏิทินงาน)
             </a>
-            <a href="user_requisitions.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'user_requisitions') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
-                <i class="fas fa-map-marker-alt w-5 text-center text-sm"></i> ใบเบิกสินค้า
+            
+            <!-- เมนูใบเบิกสินค้า พร้อมป้ายแจ้งเตือน (Badge) เมื่อแอดมินอนุมัติ -->
+            <a href="user_requisitions.php" class="menu-item w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'user_requisitions') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+                <div class="flex items-center gap-3.5">
+                    <i class="fas fa-file-invoice w-5 text-center text-sm"></i> ใบเบิกสินค้า
+                </div>
+                <?php if ($approved_requisitions_count > 0): ?>
+                    <span class="badge-count bg-rose-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full animate-pulse shadow-sm">
+                        <?= number_format($approved_requisitions_count) ?>
+                    </span>
+                <?php else: ?>
+                    <span class="badge-count bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full">0</span>
+                <?php endif; ?>
             </a>
+
             <a href="inventory.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'inventory') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
                 <i class="fas fa-boxes w-5 text-center text-sm"></i> สต็อกคงเหลือ
             </a>
@@ -106,9 +120,6 @@ try {
             <div class="pt-3 pb-2">
                 <hr id="sidebarDivider" class="border-slate-800/80 transition-colors duration-200">
             </div>
-
-           
-
         </div>
 
         <!-- 👤 ส่วนข้อมูลผู้ใช้, ปุ่มเปลี่ยนธีม Sidebar และปุ่มออกจากระบบ -->
@@ -203,7 +214,9 @@ try {
             });
 
             badgeCounts.forEach(badge => {
-                badge.className = "badge-count bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full";
+                if (!badge.classList.contains('bg-emerald-500') && !badge.classList.contains('bg-emerald-600')) {
+                    badge.className = "badge-count bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full";
+                }
             });
         }
 
@@ -226,7 +239,9 @@ try {
             });
 
             badgeCounts.forEach(badge => {
-                badge.className = "badge-count bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full";
+                if (!badge.classList.contains('bg-emerald-500') && !badge.classList.contains('bg-emerald-600')) {
+                    badge.className = "badge-count bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full";
+                }
             });
         }
         // ตรวจสอบและบังคับใช้ธีม Sidebar ทันทีที่โหลดหน้า เพื่อป้องกันการกะพริบหรือสลับเอง

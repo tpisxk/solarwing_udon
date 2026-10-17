@@ -1,381 +1,250 @@
 <?php
+/**
+ * หน้าสร้างใบเบิกวัสดุอุปกรณ์ (Requisition Form) - SolarStock Pro
+ */
 session_start();
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-header("Cache-Control: post-check=0, pre-check=0", false);
-header("Pragma: no-cache");
-header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
-
 require_once '../db/conn.php';
 require_once '../auth_check.php';
 
 $current_page = 'requisition_form';
-$success_msg = '';
-$error_msg = '';
+$success_msg = $error_msg = '';
 
-// ดึงข้อมูลโครงการทั้งหมด
-$projects = [];
-try {
-    $stmt_p = $pdo->query("SELECT id, name FROM installations ORDER BY id DESC");
-    $projects = $stmt_p->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $projects = [];
-}
+$projects = $pdo->query("SELECT id, name FROM installations ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 
-// ดึงรายการสินค้าและ id จาก products
-$products = [];
-try {
-    $stmt_prod = $pdo->query("SELECT id, name, sku, category, stock_quantity FROM products ORDER BY name ASC");
-    $products = $stmt_prod->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $products = [];
-}
+// ใช้ GREATEST(stock_quantity, 0) เพื่อบังคับให้ถ้าสต็อกติดลบ ให้แสดงผลเป็น 0 ทันที
+$products = $pdo->query("SELECT id, name, sku, GREATEST(stock_quantity, 0) AS stock_quantity FROM products ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
 
-// ดึงรายการ Template ทั้งหมด
-$templates = [];
-try {
-    $stmt_t = $pdo->query("SELECT * FROM requisition_templates ORDER BY id DESC");
-    $templates = $stmt_t->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $templates = [];
-}
+$templates = $pdo->query("SELECT * FROM requisition_templates ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 
-// ==========================================
-// 1. จัดการบันทึก Template จากฟอร์มหน้าเว็บ (ตัด kwp ออก)
-// ==========================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_as_template'])) {
-    $template_name = trim($_POST['template_name'] ?? '');
-    $items = $_POST['item'] ?? [];
-
-    if (!empty($template_name) && !empty($items)) {
-        try {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        if (isset($_POST['save_as_template']) || isset($_POST['import_as_template'])) {
+            $t_name = trim($_POST['template_name'] ?? $_POST['template_name_import'] ?? '');
+            $items = isset($_POST['import_as_template']) ? json_decode($_POST['imported_template_data'] ?? '[]', true) : ($_POST['item'] ?? []);
+            if (!$t_name || empty($items)) throw new Exception("กรุณากรอกชื่อและรายการสินค้า");
+            
             $pdo->beginTransaction();
-            $stmt_t_ins = $pdo->prepare("INSERT INTO requisition_templates (template_name) VALUES (?)");
-            $stmt_t_ins->execute([$template_name]);
-            $template_id = $pdo->lastInsertId();
-
-            // ไม่บันทึก kwp แล้ว (ใช้ตารางเดิมโดยปล่อย kwp เป็นค่าว่าง)
-            $stmt_ti_ins = $pdo->prepare("INSERT INTO requisition_template_items (template_id, product_id, quantity, remark) VALUES (?, ?, ?, ?)");
-
+            $stmt = $pdo->prepare("INSERT INTO requisition_templates (template_name) VALUES (?)");
+            $stmt->execute([$t_name]);
+            $t_id = $pdo->lastInsertId();
+            
+            $stmt_i = $pdo->prepare("INSERT INTO requisition_template_items (template_id, product_id, quantity, remark) VALUES (?, ?, ?, ?)");
             foreach ($items as $it) {
-                $product_id = intval($it['product_id'] ?? 0);
                 $qty = intval($it['qty'] ?? 0);
-                $remark = trim($it['remark'] ?? '');
-
-                if ($product_id > 0 && $qty > 0) {
-                    $stmt_ti_ins->execute([$template_id, $product_id, $qty, $remark]);
+                if ($it['product_id'] > 0 && $qty > 0) {
+                    $stmt_i->execute([$t_id, $it['product_id'], $qty, $it['remark'] ?? '']);
                 }
             }
-
             $pdo->commit();
-            $success_msg = "บันทึกฟอร์มนี้เป็น Template สำเร็จแล้ว!";
-            $stmt_t = $pdo->query("SELECT * FROM requisition_templates ORDER BY id DESC");
-            $templates = $stmt_t->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) { $pdo->rollBack(); }
-            $error_msg = "บันทึก Template ไม่สำเร็จ: " . $e->getMessage();
-        }
-    } else {
-        $error_msg = "กรุณากรอกชื่อ Template และระบุรายการสินค้าอย่างน้อย 1 รายการ";
-    }
-}
+            $success_msg = "บันทึก Template สำเร็จ!";
+            $templates = $pdo->query("SELECT * FROM requisition_templates ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+        } elseif (isset($_POST['submit_to_admin'])) {
+            $inst_id = intval($_POST['installation_id'] ?? 0);
+            $items = $_POST['item'] ?? [];
+            if ($inst_id <= 0 || empty($items)) throw new Exception("กรุณาเลือกโครงการและรายการสินค้า");
 
-// ==========================================
-// 2. จัดการ Import Excel เพื่อสร้าง Template ใหม่
-// ==========================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['import_as_template'])) {
-    $template_name = trim($_POST['template_name_import'] ?? '');
-    $imported_json = $_POST['imported_template_data'] ?? '';
-
-    if (!empty($template_name) && !empty($imported_json)) {
-        $items = json_decode($imported_json, true);
-        if (!empty($items)) {
-            try {
-                $pdo->beginTransaction();
-                $stmt_t_ins = $pdo->prepare("INSERT INTO requisition_templates (template_name) VALUES (?)");
-                $stmt_t_ins->execute([$template_name]);
-                $template_id = $pdo->lastInsertId();
-
-                $stmt_ti_ins = $pdo->prepare("INSERT INTO requisition_template_items (template_id, product_id, quantity, remark) VALUES (?, ?, ?, ?)");
-
-                foreach ($items as $it) {
-                    $product_id = intval($it['product_id'] ?? 0);
-                    $qty = intval($it['qty'] ?? 0);
-                    $remark = trim($it['remark'] ?? '');
-
-                    if ($product_id > 0 && $qty > 0) {
-                        $stmt_ti_ins->execute([$template_id, $product_id, $qty, $remark]);
-                    }
-                }
-
-                $pdo->commit();
-                $success_msg = "Import ไฟล์ Excel และบันทึกเป็น Template สำเร็จแล้ว!";
-                $stmt_t = $pdo->query("SELECT * FROM requisition_templates ORDER BY id DESC");
-                $templates = $stmt_t->fetchAll(PDO::FETCH_ASSOC);
-            } catch (Exception $e) {
-                if ($pdo->inTransaction()) { $pdo->rollBack(); }
-                $error_msg = "ไม่สามารถบันทึก Template ได้: " . $e->getMessage();
-            }
-        } else {
-            $error_msg = "ไม่พบข้อมูลรายการสินค้าในไฟล์ Excel";
-        }
-    } else {
-        $error_msg = "กรุณากรอกชื่อ Template และเลือกไฟล์ Excel";
-    }
-}
-
-// ==========================================
-// 3. จัดการเมื่อกดส่งใบเบิกให้ Admin
-// ==========================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_to_admin'])) {
-    $installation_id = intval($_POST['installation_id'] ?? 0);
-    $project_name = trim($_POST['project_name'] ?? '');
-    $req_date = trim($_POST['req_date'] ?? date('Y-m-d'));
-    $items = $_POST['item'] ?? [];
-    $engineer_name = $_SESSION['username'] ?? 'วิศวกร';
-
-    if ($installation_id > 0 && !empty($items)) {
-        try {
             $pdo->beginTransaction();
-
-            $stmt_req = $pdo->prepare("INSERT INTO requisitions (installation_id, project_name, req_date, engineer_name, status, created_at) VALUES (?, ?, ?, ?, 'Pending', NOW())");
-            $stmt_req->execute([$installation_id, $project_name, $req_date, $engineer_name]);
+            $stmt = $pdo->prepare("INSERT INTO requisitions (installation_id, project_name, req_date, engineer_name, status, created_at) VALUES (?, ?, ?, ?, 'Pending', NOW())");
+            $stmt->execute([$inst_id, $_POST['project_name'], $_POST['req_date'], $_SESSION['username'] ?? 'วิศวกร']);
             $req_id = $pdo->lastInsertId();
 
-            $stmt_item = $pdo->prepare("INSERT INTO requisition_items (requisition_id, product_id, quantity, remark) VALUES (?, ?, ?, ?)");
+            $stmt_i = $pdo->prepare("INSERT INTO requisition_items (requisition_id, product_id, quantity, remark) VALUES (?, ?, ?, ?)");
+            $stmt_po = $pdo->prepare("INSERT INTO purchase_orders (requisition_id, product_id, required_qty, status, created_at) VALUES (?, ?, ?, 'Pending', NOW())");
+
+            $out_of_stock_list = [];
 
             foreach ($items as $it) {
-                $product_id = intval($it['product_id'] ?? 0);
+                $p_id = intval($it['product_id'] ?? 0);
                 $qty = intval($it['qty'] ?? 0);
-                $remark = trim($it['remark'] ?? '');
 
-                if ($product_id > 0 && $qty > 0) {
-                    $stmt_item->execute([$req_id, $product_id, $qty, $remark]);
+                if ($p_id > 0 && $qty > 0) {
+                    // 1. บันทึกรายการเบิกปกติลง requisition_items
+                    $stmt_i->execute([$req_id, $p_id, $qty, $it['remark'] ?? '']);
+
+                    // 2. เช็กสต็อกปัจจุบันในตาราง products
+                    $stmt_chk =$pdo->prepare("SELECT name, GREATEST(stock_quantity, 0) AS stock_quantity FROM products WHERE id = ?");
+                    $stmt_chk->execute([$p_id]);
+                    $prod =$stmt_chk->fetch(PDO::FETCH_ASSOC);
+
+                    // 3. ถ้าสต็อกไม่พอหรือเป็น 0 ให้ส่งเข้าตาราง purchase_orders
+                    if ($prod) {
+                        $current_stock = intval($prod['stock_quantity']);
+                        if ($current_stock < $qty) {$needed_qty = $qty -$current_stock;
+                            $stmt_po->execute([$req_id,$p_id, $needed_qty]);$out_of_stock_list[] = $prod['name'] . " (ขาด {$needed_qty} ชิ้น)";
+                        }
+                    }
                 }
             }
-
             $pdo->commit();
-            $success_msg = "ส่งใบเบิกไปยังผู้ดูแลระบบ (Admin) เรียบร้อยแล้ว";
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) { $pdo->rollBack(); }
-            $error_msg = "เกิดข้อผิดพลาด: " . $e->getMessage();
-        }
-    } else {
-        $error_msg = "กรุณาเลือกโครงการและระบุรายการสินค้าอย่างน้อย 1 รายการ";
-    }
-}
 
-// ==========================================
-// 4. จัดการเมื่อกด Export เป็น Excel
-// ==========================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_excel'])) {
-    header("Content-Type: application/vnd.ms-excel; charset=utf-8");
-    header("Content-Disposition: attachment; filename=Requisition_Form_" . date('Ymd_His') . ".xls");
+            // ==========================================
+            // ส่ง LINE แจ้งเตือนเมื่อส่งใบเบิกใหม่
+            // ==========================================
+            $access_token = "pKse9FestSF5QdY9Hgnb7GtbcJqtXwucA50VBjLmWySwUbwM5JamQDMvlJflPQqTbibghoPRCGrGRnvehBxSooN0xjX6/3I4CF0nSeqbRgtKIBkE1mkxzPgmDKh+Io70jW7o548tAqX67bsJ3JQTBwdB04t89/1O/w1cDnyilFU=";
+            
+            $admin_line_ids = [
+                "U61cff0977ce8c9de7bc8a5f949e44a43", // User ID ของทิว
+                "U0b88acf06842b3899ee341a0fce58ba1", // พี่มะปราง
+            ];
 
-    $req_project = trim($_POST['project_name'] ?? 'ไม่ระบุชื่อโครงการ');
-    $req_date = trim($_POST['req_date'] ?? date('Y-m-d'));
-    $items = $_POST['item'] ?? [];
+            $line_message = "🔔 มีใบเบิกอุปกรณ์ใหม่จากวิศวกร!\n" .
+                            "📌 โครงการ: " . ($_POST['project_name'] ?? '-') . "\n" .
+                            "👷 ผู้ขอ: " . ($_SESSION['username'] ?? 'วิศวกร') . "\n" .
+                            "⏳ สถานะ: รอแอดมินตรวจสอบ";
 
-    echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
-    echo '<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>';
-    echo '<body>';
-    echo '<h2 style="text-align:center;">ใบเบิกของ - SOLAR WING</h2>';
-    echo '<p><b>แผนกเบิกของ:</b> Solar Wing &nbsp;&nbsp;&nbsp;&nbsp; <b>วันที่เบิกของ:</b> ' . htmlspecialchars($req_date) . '</p>';
-    echo '<p><b>ชื่อโครงการ:</b> ' . htmlspecialchars($req_project) . '</p>';
-    echo '<table border="1">';
-    echo '<tr style="background-color:#059669; color:#ffffff; font-weight:bold;">';
-    echo '<th>ลำดับที่</th><th>รายการสินค้า</th><th>จำนวนที่เบิก</th><th>หมายเหตุ</th>';
-    echo '</tr>';
+            if (!empty($out_of_stock_list)) {
+                $line_message .= "\n\n⚠️ **มีสินค้าหมด/ขาดสต็อก :**\n- " . implode("\n- ", $out_of_stock_list);
+            }
 
-    $no = 1;
-    foreach ($items as$it) {
-        $prod_id = intval($it['product_id'] ?? 0);
-        $qty = trim($it['qty'] ?? '');
-        if ($prod_id > 0 && $qty !== '') {$p_name = '-';
-            foreach ($products as$p) {
-                if ($p['id'] ==$prod_id) {
-                    $p_name =$p['name'] . (!empty($p['sku']) ? ' (SKU: ' .$p['sku'] . ')' : '');
-                    break;
+            foreach ($admin_line_ids as$to_id) {
+                if (empty($to_id)) continue;
+
+                $line_data = [
+                    'to' => $to_id,
+                    'messages' => [
+                        [
+                            'type' => 'text',
+                            'text' => $line_message
+                        ]
+                    ]
+                ];
+
+                $ch = curl_init('https://api.line.me/v2/bot/message/push');
+                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($line_data));
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Content-Type: application/json',
+                    'Authorization: Bearer ' . $access_token
+                ]);
+                curl_exec($ch);
+                curl_close($ch);
+            }
+            // ==========================================
+
+            $success_msg = "ส่งใบเบิกเรียบร้อยแล้ว!" . (!empty($out_of_stock_list) ? " (ส่งรายการสินค้าที่ขาดไปยังหน้าจัดซื้อเรียบร้อย)" : "");
+        } elseif (isset($_POST['export_excel'])) {
+            header("Content-Type: application/vnd.ms-excel; charset=utf-8");
+            header("Content-Disposition: attachment; filename=Requisition_" . date('Ymd_His') . ".xls");
+            echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head><body>';
+            echo '<h2>ใบเบิกของ - SOLAR WING</h2><p><b>โครงการ:</b> ' . htmlspecialchars($_POST['project_name']) . '</p><table border="1"><tr style="background:#059669;color:#fff;"><th>#</th><th>สินค้า</th><th>จำนวน</th><th>หมายเหตุ</th></tr>';
+            $no = 1;
+            foreach ($_POST['item'] ?? [] as$it) {
+                $qty = intval($it['qty'] ?? 0);
+                if ($it['product_id'] > 0 && $qty > 0) {$p_name = '-';
+                    foreach ($products as$p) if ($p['id'] ==$it['product_id']) $p_name =$p['name'] . ($p['sku'] ? " ({$p['sku']})" : '');
+                    echo "<tr><td align='center'>" . $no++ . "</td><td>" . htmlspecialchars($p_name) . "</td><td align='center'>" . $qty . "</td><td>" . htmlspecialchars($it['remark']) . "</td></tr>";
                 }
             }
-            echo '<tr>';
-            echo '<td align="center">' . $no++ . '</td>';
-            echo '<td>' . htmlspecialchars($p_name) . '</td>';
-            echo '<td align="center">' . htmlspecialchars($qty) . '</td>';
-            echo '<td>' . htmlspecialchars($it['remark'] ?? '') . '</td>';
-            echo '</tr>';
+            echo '</table></body></html>';
+            exit();
         }
+    } catch (Exception $e) {
+        if ($pdo->inTransaction())$pdo->rollBack();
+        $error_msg =$e->getMessage();
     }
-    echo '</table>';
-    echo '</body></html>';
-    exit();
 }
 ?>
 <!DOCTYPE html>
 <html lang="th">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ใบเบิกของ (Requisition Form) - SolarStock Pro</title>
+    <title>ใบเบิกของ - SolarStock Pro</title>
     <link rel="icon" type="image/png" href="../Pic/456456.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Prompt', 'sans-serif'] },
-                    colors: { brandGreen: '#059669' }
-                }
-            }
-        }
-    </script>
+    <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { brandGreen: '#059669' } } } }</script>
 </head>
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden">
 
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
-
-    <div id="sidebarWrapper" class="fixed inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 md:static transition-transform duration-300 ease-in-out">
-        <?php
-        if (file_exists('sidebar_engineer.php')) { include 'sidebar_engineer.php'; }
-        elseif (file_exists('sidebar_admin.php')) { include 'sidebar_admin.php'; }
-        ?>
+    <div id="sidebarWrapper" class="fixed inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 md:static transition-transform bg-white border-r border-slate-200">
+        <?php if (file_exists('sidebar_engineer.php')) include 'sidebar_engineer.php'; elseif (file_exists('sidebar_admin.php')) include 'sidebar_admin.php'; ?>
     </div>
+    
+    <div id="sidebarBackdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 backdrop-blur-md z-40 hidden md:hidden transition-all"></div>
 
-    <div id="sidebarBackdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden backdrop-blur-sm"></div>
-
-    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100 w-full">
-        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-10 shrink-0 z-10 shadow-sm">
+    <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 w-full">
+        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-10">
             <div class="flex items-center gap-3">
-                <button onclick="toggleSidebar()" class="md:hidden text-slate-600 hover:text-slate-900 text-xl p-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none">
-                    <i class="fa-solid fa-bars"></i>
-                </button>
-                <div>
-                    <h2 class="text-base md:text-xl font-bold text-slate-900 tracking-tight">สร้างใบเบิกของ (Requisition Form)</h2>
-                    <p class="text-[11px] md:text-xs text-slate-500 mt-0.5">เลือกใช้ Template สำเร็จรูป หรือบันทึกฟอร์มใหม่เพื่อใช้งาน</p>
-                </div>
+                <button onclick="toggleSidebar()" class="md:hidden text-slate-600 p-2 rounded-xl bg-white border border-slate-200"><i class="fa-solid fa-bars"></i></button>
+                <h2 class="text-base md:text-lg font-bold text-slate-900">สร้างใบเบิกของ (Requisition Form)</h2>
             </div>
-            <div class="flex items-center gap-3">
-                <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 md:px-4 py-2.5 rounded-2xl text-xs md:text-sm font-semibold flex items-center gap-2">
-                    <i class="fa-solid fa-house text-emerald-600"></i> <span class="hidden sm:inline">หน้าหลัก</span>
-                </a>
-            </div>
+            <a href="dashboard.php" class="bg-white hover:bg-slate-50 px-4 py-2.5 rounded-xl text-xs font-semibold border border-slate-200 flex items-center gap-2"><i class="fa-solid fa-house text-emerald-600"></i> หน้าหลัก</a>
         </header>
 
-        <div class="flex-1 overflow-y-auto p-4 md:p-8 w-full">
-            <div class="max-w-6xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-sm p-6 md:p-8 space-y-6">
+        <div class="flex-1 overflow-y-auto p-4 md:p-8">
+            <div class="max-w-6xl mx-auto bg-white rounded-2xl border border-slate-200 p-6 md:p-8 space-y-6">
+                <?php if ($success_msg): ?><div class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3.5 rounded-xl text-xs font-bold"><i class="fa-solid fa-circle-check"></i> <?= $success_msg ?></div><?php endif; ?>
+                <?php if ($error_msg): ?><div class="bg-rose-50 border border-rose-200 text-rose-800 p-3.5 rounded-xl text-xs font-bold"><i class="fa-solid fa-triangle-exclamation"></i> <?= htmlspecialchars($error_msg) ?></div><?php endif; ?>
 
-                <?php if (!empty($success_msg)): ?>
-                    <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs font-semibold"><?= $success_msg ?></div>
-                <?php endif; ?>
-                <?php if (!empty($error_msg)): ?>
-                    <div class="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-2xl text-xs font-semibold"><?= $error_msg ?></div>
-                <?php endif; ?>
-
-                <div class="border-b border-slate-200 pb-6 flex justify-between items-center">
-                    <div>
-                        <h1 class="text-xl md:text-2xl font-black text-slate-900 tracking-wider">SOLAR WING</h1>
-                        <p class="text-xs md:text-sm font-bold text-slate-600 mt-1">ใบเบิกของ (Requisition Form)</p>
-                    </div>
-                    <div class="text-right text-xs space-y-1">
-                        <div><b>แผนก:</b> Solar Wing</div>
-                        <div><b>วันที่:</b> <?= date('Y-m-d') ?></div>
-                    </div>
-                </div>
-
-                <!-- โซนจัดการ Template -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
-                    <div class="flex items-center gap-2">
-                        <select id="templateSelect" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:border-brandGreen">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                    <div class="flex gap-2">
+                        <select id="templateSelect" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs bg-white font-medium">
                             <option value="">-- เลือก Template ฟอร์มสำเร็จรูป --</option>
-                            <?php foreach ($templates as$t): ?>
-                                <option value="<?= $t['id'] ?>"><?= htmlspecialchars($t['template_name']) ?></option>
-                            <?php endforeach; ?>
+                            <?php foreach ($templates as$t): ?><option value="<?= $t['id'] ?>"><?= htmlspecialchars($t['template_name']) ?></option><?php endforeach; ?>
                         </select>
-                        <button type="button" onclick="loadTemplate()" class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 shadow-sm">
-                            <i class="fa-solid fa-bolt text-amber-400"></i> โหลดฟอร์มนี้
-                        </button>
+                        <button type="button" onclick="loadTemplate()" class="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold shrink-0"><i class="fa-solid fa-bolt text-amber-400"></i> โหลด</button>
                     </div>
-
-                    <div class="flex items-center gap-2">
-                        <input type="file" id="templateExcelFile" accept=".xlsx, .xls, .csv" class="hidden" onchange="importAndSaveTemplate(event)">
-                        <input type="text" id="importTemplateName" placeholder="ตั้งชื่อ Template จากไฟล์ Excel..." class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:border-brandGreen">
-                        <button type="button" onclick="triggerImportTemplate()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 shadow-sm">
-                            <i class="fa-solid fa-file-import"></i> Import เป็นฟอร์ม
-                        </button>
+                    <div class="flex gap-2">
+                        <input type="file" id="templateExcelFile" accept=".xlsx, .xls, .csv" class="hidden" onchange="importExcel(event)">
+                        <input type="text" id="importTemplateName" placeholder="ตั้งชื่อ Template จาก Excel..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs bg-white font-medium">
+                        <button type="button" onclick="if(document.getElementById('importTemplateName').value) document.getElementById('templateExcelFile').click(); else alert('กรุณาตั้งชื่อ Template');" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shrink-0"><i class="fa-solid fa-file-import"></i> นำเข้า</button>
                     </div>
                 </div>
 
-                <!-- ฟอร์มหลักสำหรับเบิกของ -->
-                <form action="requisition_form.php" method="POST" id="reqForm" class="space-y-6">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-200/80">
-                        <div class="space-y-1">
-                            <label class="block text-xs font-bold text-slate-700 uppercase">เลือกชื่อโครงการ / หน้างาน</label>
-                            <select name="installation_id" id="installationSelect" onchange="updateProjectName(this)" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:border-brandGreen">
+                <form action="" method="POST" id="reqForm" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 uppercase mb-1.5">โครงการ / หน้างาน <span class="text-rose-500">*</span></label>
+                            <select name="installation_id" onchange="document.getElementById('project_name').value = this.options[this.selectedIndex].getAttribute('data-name') || ''" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-white font-semibold">
                                 <option value="">-- เลือกโครงการ --</option>
-                                <?php foreach ($projects as$p): ?>
-                                    <option value="<?= $p['id'] ?>" data-name="<?= htmlspecialchars($p['name']) ?>"><?= htmlspecialchars($p['name']) ?></option>
-                                <?php endforeach; ?>
+                                <?php foreach ($projects as$p): ?><option value="<?= $p['id'] ?>" data-name="<?= htmlspecialchars($p['name']) ?>"><?= htmlspecialchars($p['name']) ?></option><?php endforeach; ?>
                             </select>
                             <input type="hidden" name="project_name" id="project_name">
                         </div>
-                        <div class="space-y-1">
-                            <label class="block text-xs font-bold text-slate-700 uppercase">วันที่เบิก</label>
-                            <input type="date" name="req_date" value="<?= date('Y-m-d') ?>" class="w-full px-4 py-2 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:border-brandGreen">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 uppercase mb-1.5">วันที่เบิก <span class="text-rose-500">*</span></label>
+                            <input type="date" name="req_date" value="<?= date('Y-m-d') ?>" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-white font-semibold">
                         </div>
                     </div>
 
-                    <div class="space-y-2">
-                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                            <label class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">รายการสินค้าจาก Stock</label>
-                            <div class="flex items-center gap-2">
-                                <button type="button" onclick="addRow()" class="bg-brandGreen hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm">
-                                    <i class="fa-solid fa-plus text-xs"></i> เพิ่มแถวรายการ
-                                </button>
-                            </div>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <label class="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5"><i class="fa-solid fa-boxes-stacked text-brandGreen"></i> รายการสินค้าจาก Stock</label>
+                            <button type="button" onclick="addRow()" class="bg-brandGreen hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold"><i class="fa-solid fa-plus"></i> เพิ่มแถว</button>
                         </div>
 
-                        <div class="overflow-x-auto border border-slate-200 rounded-2xl">
-                            <table class="w-full text-left border-collapse text-xs min-w-[700px]" id="reqTable">
-                                <thead>
-                                    <tr class="bg-slate-100 border-b border-slate-200 text-slate-600 font-bold uppercase">
-                                        <th class="py-3 px-3 text-center w-12">ลำดับ</th>
-                                        <th class="py-3 px-4">เลือกรายการจาก Stock</th>
-                                        <th class="py-3 px-3 text-center w-32">คงเหลือในคลัง</th>
-                                        <th class="py-3 px-3 text-center w-28">จำนวนเบิก</th>
+                        <div class="overflow-x-visible border border-slate-200 rounded-2xl bg-white">
+                            <table class="w-full text-left text-xs min-w-[750px]">
+                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase">
+                                    <tr>
+                                        <th class="py-3 px-4 text-center w-12">#</th>
+                                        <th class="py-3 px-4">พิมพ์ค้นหา หรือเลือกสินค้าจากคลัง</th>
+                                        <th class="py-3 px-4 text-center w-32">คงเหลือ</th>
+                                        <th class="py-3 px-4 text-center w-28">จำนวนเบิก</th>
                                         <th class="py-3 px-4">หมายเหตุ</th>
-                                        <th class="py-3 px-2 text-center w-16">จัดการ</th>
+                                        <th class="py-3 px-3 text-center w-16">ลบ</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100" id="tableBody">
                                     <?php for ($i = 0; $i < 4; $i++): ?>
-                                    <tr class="hover:bg-slate-50/50 row-item">
-                                        <td class="py-2.5 px-3 text-center font-bold text-slate-500 row-no"><?= $i + 1 ?></td>
-                                        <td class="py-2.5 px-3">
-                                            <select name="item[<?= $i ?>][product_id]" onchange="updateProductInfo(this, <?= $i ?>)" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:border-brandGreen prod-select">
-                                                <option value="">-- เลือกสินค้าจาก Stock --</option>
-                                                <?php foreach ($products as$prod): ?>
-                                                    <option value="<?= $prod['id'] ?>" data-stock="<?= intval($prod['stock_quantity']) ?>">
-                                                        <?= htmlspecialchars($prod['name']) ?><?= !empty($prod['sku']) ? ' (SKU: ' .$prod['sku'] . ')' : '' ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
+                                    <tr class="hover:bg-slate-50/50 row-item relative">
+                                        <td class="py-3 px-4 text-center font-bold text-slate-400 row-no"><?= $i + 1 ?></td>
+                                        <td class="py-3 px-4 relative">
+                                            <div class="relative custom-dropdown">
+                                                <input type="text" autocomplete="off" oninput="filterDropdown(this, <?= $i ?>)" onfocus="openDropdown(this)" placeholder="🔍 พิมพ์ค้นหาสินค้า..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:border-brandGreen font-medium prod-input">
+                                                <div class="dropdown-list hidden absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl max-h-60 overflow-y-auto divide-y"></div>
+                                                <input type="hidden" name="item[<?= $i ?>][product_id]" class="prod-id-input">
+                                            </div>
                                         </td>
-                                        <td class="py-2.5 px-3 text-center">
-                                            <input type="text" id="stock_<?= $i ?>" value="-" readonly class="w-full px-2 py-2 rounded-xl border border-slate-100 bg-slate-50 text-center text-xs font-bold text-emerald-600">
-                                        </td>
-                                        <td class="py-2.5 px-3 text-center">
-                                            <input type="number" name="item[<?= $i ?>][qty]" min="0" placeholder="0" class="w-full px-2 py-2 rounded-xl border border-slate-200 text-center text-xs focus:outline-none focus:border-brandGreen font-bold">
-                                        </td>
-                                        <td class="py-2.5 px-3">
-                                            <input type="text" name="item[<?= $i ?>][remark]" placeholder="หมายเหตุ..." class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brandGreen">
-                                        </td>
-                                        <td class="py-2.5 px-2 text-center">
-                                            <button type="button" onclick="removeRow(this)" class="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center mx-auto transition-all" title="ลบแถว">
-                                                <i class="fa-solid fa-trash text-xs"></i>
-                                            </button>
-                                        </td>
+                                        <td class="py-3 px-4 text-center"><input type="text" id="stock_text_<?= $i ?>" value="-" readonly class="w-full px-2 py-2 rounded-xl border border-slate-200 bg-slate-50 text-center font-bold text-emerald-600"><input type="hidden" id="stock_val_<?= $i ?>" value="0"></td>
+                                        <td class="py-3 px-4 text-center"><input type="number" name="item[<?= $i ?>][qty]" min="0" value="0" class="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-center font-bold"></td>
+                                        <td class="py-3 px-4"><input type="text" name="item[<?= $i ?>][remark]" placeholder="หมายเหตุ..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200"></td>
+                                        <td class="py-3 px-3 text-center"><button type="button" onclick="this.closest('tr').remove(); recalculate();" class="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center mx-auto"><i class="fa-solid fa-trash text-xs"></i></button></td>
                                     </tr>
                                     <?php endfor; ?>
                                 </tbody>
@@ -383,263 +252,162 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_excel'])) {
                         </div>
                     </div>
 
-                    <!-- ปุ่มล่างฟอร์ม -->
-                    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-100">
-                        <div class="flex items-center gap-2 w-full sm:w-auto">
-                            <input type="text" id="newTemplateName" placeholder="ชื่อ Template จากฟอร์มนี้..." class="px-3 py-2.5 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:border-brandGreen w-full sm:w-60">
-                            <button type="button" onclick="saveTemplate()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 shadow-sm">
-                                <i class="fa-solid fa-bookmark"></i> บันทึกตารางนี้เป็น Template
-                            </button>
+                    <div class="flex flex-col lg:flex-row justify-between gap-4 pt-4 border-t border-slate-200">
+                        <div class="flex gap-2 w-full lg:w-auto">
+                            <input type="text" id="newTemplateName" placeholder="ชื่อ Template..." class="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs w-full sm:w-64">
+                            <button type="button" onclick="saveTemplate()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold shrink-0"><i class="fa-solid fa-bookmark"></i> บันทึก Template</button>
                         </div>
-
-                        <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
-                            <button type="submit" name="export_excel" value="1" formtarget="_blank" class="bg-slate-700 hover:bg-slate-800 text-white px-5 py-3 rounded-2xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-file-excel text-sm text-emerald-400"></i> Export เป็น Excel
-                            </button>
-                            <button type="submit" name="submit_to_admin" onclick="return confirm('ยืนยันส่งใบเบิกนี้ให้ Admin ตรวจสอบ?')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl text-xs font-bold shadow-md shadow-emerald-600/25 transition-all flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-paper-plane text-sm"></i> ส่งใบเบิกให้ Admin
-                            </button>
+                        <div class="flex gap-2.5 justify-end w-full lg:w-auto">
+                            <button type="submit" name="export_excel" value="1" formtarget="_blank" class="bg-slate-700 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl text-xs font-bold"><i class="fa-solid fa-file-excel text-emerald-400"></i> Excel</button>
+                            <button type="submit" name="submit_to_admin" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold"><i class="fa-solid fa-paper-plane"></i> ส่ง Admin</button>
                         </div>
                     </div>
                 </form>
-
             </div>
         </div>
     </main>
 
     <script>
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebarWrapper');
-            const backdrop = document.getElementById('sidebarBackdrop');
-            sidebar.classList.toggle('-translate-x-full');
-            backdrop.classList.toggle('hidden');
-        }
-
         const productsData = <?= json_encode($products) ?>;
-        
-        function updateProjectName(selectElem) {
-            const selected = selectElem.options[selectElem.selectedIndex];
-            document.getElementById('project_name').value = selected.getAttribute('data-name') || '';
+        const toggleSidebar = () => {
+            document.getElementById('sidebarWrapper').classList.toggle('-translate-x-full');
+            document.getElementById('sidebarBackdrop').classList.toggle('hidden');
+        };
+
+        function openDropdown(input) {
+            document.querySelectorAll('.dropdown-list').forEach(l => l.classList.add('hidden'));
+            renderList(input.closest('.custom-dropdown').querySelector('.dropdown-list'), productsData, input);
         }
 
-        function updateProductInfo(selectElem, index) {
-            const selectedOption = selectElem.options[selectElem.selectedIndex];
-            const stockQty = selectedOption.getAttribute('data-stock') ?? '-';
-            const stockInput = document.getElementById('stock_' + index);
-            if (stockInput) stockInput.value = stockQty !== '-' ? stockQty + ' ชิ้น' : '-';
-        }
-
-        function addRow(selectedProductId = '', qtyVal = '', remarkVal = '') {
-            const tbody = document.getElementById('tableBody');
-            const rowCount = tbody.rows.length;
-            let optionsHtml = '<option value="">-- เลือกสินค้าจาก Stock --</option>';
-            
-            productsData.forEach(p => {
-                let label = p.name + (p.sku ? ` (SKU: ${p.sku})` : '');
-                let selected = (p.id == selectedProductId) ? 'selected' : '';
-                let stock = p.stock_quantity ?? 0;
-                optionsHtml += `<option value="${p.id}" data-stock="${stock}" ${selected}>${label}</option>`;
-            });
-
-            let initialStock = '-';
-            if(selectedProductId) {
-                let found = productsData.find(p => p.id == selectedProductId);
-                if(found) initialStock = (found.stock_quantity ?? 0) + ' ชิ้น';
+        function filterDropdown(input, idx) {
+            const val = input.value.toLowerCase().trim();
+            const filtered = productsData.filter(p => (p.name + (p.sku || '')).toLowerCase().includes(val));
+            renderList(input.closest('.custom-dropdown').querySelector('.dropdown-list'), filtered, input, idx);
+            if (!val) { 
+                input.closest('.custom-dropdown').querySelector('.prod-id-input').value = ''; 
+                document.getElementById('stock_text_' + idx).value = '-'; 
+                document.getElementById('stock_val_' + idx).value = '0'; 
             }
+        }
 
-            const newRow = document.createElement('tr');
-            newRow.className = 'hover:bg-slate-50/50 row-item';
-            newRow.innerHTML = `
-                <td class="py-2.5 px-3 text-center font-bold text-slate-500 row-no">${rowCount + 1}</td>
-                <td class="py-2.5 px-3">
-                    <select name="item[${rowCount}][product_id]" onchange="updateProductInfo(this, ${rowCount})" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:border-brandGreen prod-select">${optionsHtml}</select>
+        function renderList(container, items, input, idx) {
+            container.innerHTML = items.length ? '' : `<div class="p-3 text-center text-slate-400 text-xs">ไม่พบสินค้า</div>`;
+            items.forEach(p => {
+                const stockQty = Math.max(parseInt(p.stock_quantity) || 0, 0);
+                const div = document.createElement('div');
+                div.className = 'px-3.5 py-2 hover:bg-emerald-50 cursor-pointer flex justify-between text-xs items-center';
+                div.innerHTML = `<div><div class="font-bold text-slate-800">${p.name}</div><div class="text-[10px] text-slate-400">SKU: ${p.sku || '-'}</div></div><span class="px-2 py-0.5 rounded-full font-bold text-[10px] ${stockQty > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}">สต็อก: ${stockQty}</span>`;
+                div.onclick = () => {
+                    input.value = `${p.name} ${p.sku ? '(' + p.sku + ')' : ''}`;
+                    const row = input.closest('tr');
+                    const rowIndex = Array.from(row.parentNode.children).indexOf(row);
+                    row.querySelector('.prod-id-input').value = p.id;
+                    document.getElementById('stock_text_' + rowIndex).value = stockQty + ' ชิ้น';
+                    document.getElementById('stock_val_' + rowIndex).value = stockQty;
+                    
+                    const stockInputText = document.getElementById('stock_text_' + rowIndex);
+                    if (stockQty <= 0) {
+                        stockInputText.className = 'w-full px-2 py-2 rounded-xl border border-rose-200 bg-rose-50 text-center font-bold text-rose-600';
+                    } else {
+                        stockInputText.className = 'w-full px-2 py-2 rounded-xl border border-slate-200 bg-slate-50 text-center font-bold text-emerald-600';
+                    }
+
+                    container.classList.add('hidden');
+                };
+                container.appendChild(div);
+            });
+            container.classList.remove('hidden');
+        }
+
+        document.addEventListener('click', e => { if (!e.target.closest('.custom-dropdown')) document.querySelectorAll('.dropdown-list').forEach(l => l.classList.add('hidden')); });
+
+        function addRow(pId = '', qty = '0', remark = '') {
+            const tbody = document.getElementById('tableBody');
+            const idx = tbody.rows.length;
+            const p = productsData.find(x => x.id == pId) || {};
+            const stockQty = Math.max(parseInt(p.stock_quantity) || 0, 0);
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-50/50 row-item relative';
+            tr.innerHTML = `
+                <td class="py-3 px-4 text-center font-bold text-slate-400 row-no">${idx + 1}</td>
+                <td class="py-3 px-4 relative">
+                    <div class="relative custom-dropdown">
+                        <input type="text" autocomplete="off" value="${p.name ? p.name + (p.sku ? ' (' + p.sku + ')' : '') : ''}" oninput="filterDropdown(this, ${idx})" onfocus="openDropdown(this)" placeholder="🔍 ค้นหาสินค้า..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs bg-white font-medium prod-input">
+                        <div class="dropdown-list hidden absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl max-h-60 overflow-y-auto divide-y"></div>
+                        <input type="hidden" name="item[${idx}][product_id]" value="${pId}" class="prod-id-input">
+                    </div>
                 </td>
-                <td class="py-2.5 px-3 text-center"><input type="text" id="stock_${rowCount}" value="${initialStock}" readonly class="w-full px-2 py-2 rounded-xl border border-slate-100 bg-slate-50 text-center text-xs font-bold text-emerald-600"></td>
-                <td class="py-2.5 px-3 text-center"><input type="number" name="item[${rowCount}][qty]" min="0" value="${qtyVal}" placeholder="0" class="w-full px-2 py-2 rounded-xl border border-slate-200 text-center text-xs focus:outline-none focus:border-brandGreen font-bold"></td>
-                <td class="py-2.5 px-3"><input type="text" name="item[${rowCount}][remark]" value="${remarkVal}" placeholder="หมายเหตุ..." class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brandGreen"></td>
-                <td class="py-2.5 px-2 text-center"><button type="button" onclick="removeRow(this)" class="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center mx-auto transition-all" title="ลบแถว"><i class="fa-solid fa-trash text-xs"></i></button></td>
+                <td class="py-3 px-4 text-center"><input type="text" id="stock_text_${idx}" value="${p.name ? stockQty + ' ชิ้น' : '-'}" readonly class="w-full px-2 py-2 rounded-xl border border-slate-200 bg-slate-50 text-center font-bold ${stockQty > 0 ? 'text-emerald-600' : 'text-rose-600 bg-rose-50'}"><input type="hidden" id="stock_val_${idx}" value="${stockQty}"></td>
+                <td class="py-3 px-4 text-center"><input type="number" name="item[${idx}][qty]" min="0" value="${qty}" placeholder="0" class="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-center font-bold"></td>
+                <td class="py-3 px-4"><input type="text" name="item[${idx}][remark]" value="${remark}" placeholder="หมายเหตุ..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200"></td>
+                <td class="py-3 px-3 text-center"><button type="button" onclick="this.closest('tr').remove(); recalculate();" class="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center mx-auto"><i class="fa-solid fa-trash text-xs"></i></button></td>
             `;
-            tbody.appendChild(newRow);
-            recalculateRows();
+            tbody.appendChild(tr);
+            recalculate();
         }
 
-        function removeRow(btn) {
-            btn.closest('tr').remove();
-            recalculateRows();
-        }
-
-        function recalculateRows() {
-            document.querySelectorAll('#tableBody .row-item').forEach((row, index) => {
-                row.querySelector('.row-no').innerText = index + 1;
-                row.querySelector('select').name = `item[${index}][product_id]`;
-                row.querySelector('input[id^="stock_"]').id = `stock_${index}`;
-                row.querySelectorAll('input[type="number"]').forEach(inp => inp.name = `item[${index}][qty]`);
-                row.querySelectorAll('input[type="text"][name*="remark"]').forEach(inp => inp.name = `item[${index}][remark]`);
-                row.querySelector('select').setAttribute('onchange', `updateProductInfo(this, ${index})`);
+        function recalculate() {
+            document.querySelectorAll('#tableBody .row-item').forEach((row, i) => {
+                row.querySelector('.row-no').innerText = i + 1;
+                row.querySelector('.prod-id-input').name = `item[${i}][product_id]`;
+                row.querySelector('input[id^="stock_text_"]').id = `stock_text_${i}`;
+                row.querySelector('input[id^="stock_val_"]').id = `stock_val_${i}`;
+                row.querySelector('.prod-input').setAttribute('oninput', `filterDropdown(this, ${i})`);
+                row.querySelector('input[type="number"]').name = `item[${i}][qty]`;
+                row.querySelector('input[type="text"][placeholder*="หมายเหตุ"]').name = `item[${i}][remark]`;
             });
         }
 
         function saveTemplate() {
-            let tName = document.getElementById('newTemplateName').value.trim();
-            if (!tName) {
-                alert('กรุณาตั้งชื่อ Template ก่อนบันทึก');
-                return;
-            }
+            let name = document.getElementById('newTemplateName').value.trim();
+            if (!name) return alert('กรุณาตั้งชื่อ Template');
             let form = document.getElementById('reqForm');
-            let hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.name = 'save_as_template';
-            hiddenInput.value = '1';
-            
-            let hiddenNameInput = document.createElement('input');
-            hiddenNameInput.type = 'hidden';
-            hiddenNameInput.name = 'template_name';
-            hiddenNameInput.value = tName;
-
-            form.appendChild(hiddenInput);
-            form.appendChild(hiddenNameInput);
+            [['save_as_template', '1'], ['template_name', name]].forEach(d => {
+                let i = document.createElement('input'); i.type = 'hidden'; i.name = d[0]; i.value = d[1]; form.appendChild(i);
+            });
             form.submit();
         }
 
         async function loadTemplate() {
-            let tId = document.getElementById('templateSelect').value;
-            if (!tId) {
-                alert('กรุณาเลือก Template ที่ต้องการใช้งาน');
-                return;
-            }
-
-            try {
-                let response = await fetch('get_template_items.php?template_id=' + tId);
-                let result = await response.json();
-                
-                if (result.success && result.items.length > 0) {
-                    const tbody = document.getElementById('tableBody');
-                    tbody.innerHTML = '';
-
-                    result.items.forEach(item => {
-                        addRow(item.product_id, item.quantity, item.remark);
-                    });
-                    alert('โหลด Template สำเร็จเรียบร้อยแล้ว!');
-                } else {
-                    alert('ไม่พบรายการสินค้าใน Template นี้');
-                }
-            } catch (err) {
-                console.error(err);
-                alert('เกิดข้อผิดพลาดในการโหลด Template');
+            let id = document.getElementById('templateSelect').value;
+            if (!id) return alert('กรุณาเลือก Template');
+            let res = await fetch('get_template_items.php?template_id=' + id).then(r => r.json());
+            if (res.success && res.items) {
+                document.getElementById('tableBody').innerHTML = '';
+                res.items.forEach(it => addRow(it.product_id, it.quantity, it.remark));
+                alert('โหลด Template สำเร็จ!');
             }
         }
 
-        function triggerImportTemplate() {
-            let tName = document.getElementById('importTemplateName').value.trim();
-            if (!tName) {
-                alert('กรุณาตั้งชื่อ Template ก่อนเลือกไฟล์ Excel');
-                return;
-            }
-            document.getElementById('templateExcelFile').click();
-        }
-
-        function importAndSaveTemplate(event) {
-            const file = event.target.files[0];
+        function importExcel(e) {
+            let file = e.target.files[0];
             if (!file) return;
-
-            let tName = document.getElementById('importTemplateName').value.trim();
-            const reader = new FileReader();
-
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-                    let headerRowIndex = -1;
-                    let colMap = { sku: 0, item: 1, qty: 3, remark: 6 };
-
-                    for (let i = 0; i < jsonRows.length; i++) {
-                        let row = jsonRows[i];
-                        if (!row) continue;
-                        let rowStr = row.join('|').toLowerCase();
-                        if (rowStr.includes('รหัส') || rowStr.includes('ชื่อสินค้า') || rowStr.includes('จำนวน')) {
-                            headerRowIndex = i;
-                            row.forEach((cell, idx) => {
-                                let val = String(cell).trim();
-                                if (val.includes('รหัส')) colMap.sku = idx;
-                                if (val.includes('ชื่อ')) colMap.item = idx;
-                                if (val.includes('จำนวน')) colMap.qty = idx;
-                                if (val.includes('หมายเหตุ')) colMap.remark = idx;
-                            });
-                            break;
-                        }
+            let reader = new FileReader();
+            reader.onload = function(evt) {
+                let workbook = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
+                let rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+                let items = [];
+                rows.forEach(r => {
+                    let name = String(r[1] || '').trim().toLowerCase();
+                    let qty = parseInt(r[3] || 0);
+                    let rem = String(r[5] || '').trim();
+                    if (name && qty > 0) {
+                        let p = productsData.find(x => x.name.toLowerCase() === name || (x.sku && name.includes(x.sku.toLowerCase())));
+                        if (p) items.push({ product_id: p.id, qty: qty, remark: rem });
                     }
-
-                    let startIndex = headerRowIndex !== -1 ? headerRowIndex + 1 : 0;
-                    const cleanText = (str) => String(str || '').trim().replace(/\s+/g, ' ');
-                    let parsedItems = [];
-
-                    for (let i = startIndex; i < jsonRows.length; i++) {
-                        let row = jsonRows[i];
-                        if (!row || row.length === 0) continue;
-
-                        let rawSku = cleanText(row[colMap.sku]);
-                        let rawItemName = cleanText(row[colMap.item]);
-                        let qty = row[colMap.qty] !== undefined ? cleanText(row[colMap.qty]) : '';
-                        let rawRemark = colMap.remark !== undefined ? cleanText(row[colMap.remark]) : '';
-
-                        if (!rawSku && !rawItemName) continue;
-
-                        let foundProd = productsData.find(p => {
-                            let pName = cleanText(p.name).toLowerCase();
-                            let pSku = cleanText(p.sku).toLowerCase();
-                            let searchSku = rawSku.toLowerCase();
-                            let searchName = rawItemName.toLowerCase();
-                            return (pSku && pSku === searchSku) || (pName && pName === searchName) || pName.includes(searchName);
-                        });
-
-                        if (foundProd) {
-                            parsedItems.push({
-                                product_id: foundProd.id,
-                                qty: qty || 1,
-                                remark: rawRemark
-                            });
-                        }
-                    }
-
-                    if (parsedItems.length === 0) {
-                        alert('ไม่พบรายการสินค้าที่ตรงกับระบบในไฟล์ Excel นี้');
-                        return;
-                    }
-
+                });
+                if (items.length) {
                     let form = document.getElementById('reqForm');
-                    
-                    let inputAction = document.createElement('input');
-                    inputAction.type = 'hidden';
-                    inputAction.name = 'import_as_template';
-                    inputAction.value = '1';
-
-                    let inputName = document.createElement('input');
-                    inputName.type = 'hidden';
-                    inputName.name = 'template_name_import';
-                    inputName.value = tName;
-
-                    let inputData = document.createElement('input');
-                    inputData.type = 'hidden';
-                    inputData.name = 'imported_template_data';
-                    inputData.value = JSON.stringify(parsedItems);
-
-                    form.appendChild(inputAction);
-                    form.appendChild(inputName);
-                    form.appendChild(inputData);
+                    [['import_as_template', '1'], ['template_name_import', document.getElementById('importTemplateName').value], ['imported_template_data', JSON.stringify(items)]].forEach(d => {
+                        let i = document.createElement('input'); i.type = 'hidden'; i.name = d[0]; i.value = d[1]; form.appendChild(i);
+                    });
                     form.submit();
-
-                } catch (err) {
-                    console.error(err);
-                    alert('เกิดข้อผิดพลาดในการอ่านไฟล์ Excel');
+                } else {
+                    alert('ไม่พบสินค้าที่ตรงกันในไฟล์ Excel');
                 }
-                event.target.value = '';
             };
             reader.readAsArrayBuffer(file);
         }
     </script>
 </body>
-
 </html>

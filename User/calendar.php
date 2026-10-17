@@ -60,15 +60,6 @@ try {
     $all_month_events = [];
 }
 
-// ดึงรายการผู้ใช้ทั้งหมดเพื่อนำไปใส่ใน Dropdown
-$usersList = [];
-try {
-    $stmt_u = $pdo->query("SELECT id, COALESCE(name, fullname, username) AS display_name FROM users ORDER BY id ASC");
-    $usersList = $stmt_u->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $usersList = [];
-}
-
 // จัดกลุ่มงานลงในแต่ละวัน
 $events_by_date = [];
 for ($day = 1; $day <= $total_days_in_month; $day++) {
@@ -117,9 +108,8 @@ $action = $_GET['action'] ?? '';
 
 <body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden relative">
 
-    <!-- Sidebar พร้อมคลาสสำหรับซ่อน/แสดง -->
+    <!-- Sidebar -->
     <div id="sidebar" class="fixed lg:static inset-y-0 left-0 z-30 transform -translate-x-full lg:translate-x-0 transition-all duration-300 ease-in-out bg-white border-r border-slate-200 w-64 flex-shrink-0 flex flex-col">
-        
         <div class="flex-1 overflow-y-auto">
             <?php include 'sidebar.php'; ?>
         </div>
@@ -133,17 +123,11 @@ $action = $_GET['action'] ?? '';
 
         <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 shrink-0 z-10 shadow-sm">
             <div class="flex items-center gap-3">
-                <!-- ปุ่มเปิด Sidebar บนมือถือ -->
                 <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
                     <i class="fa-solid fa-bars text-lg"></i>
                 </button>
-                <!-- <span class="relative flex h-3 w-3">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                </span> -->
                 <div>
                     <h2 class="text-lg lg:text-xl font-bold text-slate-900 tracking-tight">ปฏิทินงานและนัดหมาย</h2>
-                    <!-- <p class="text-xs lg:text-sm text-slate-500 mt-0.5">จัดการและตรวจสอบตารางเวลางานติดตั้งหรือนัดหมายลูกค้า</p> -->
                 </div>
             </div>
             <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2 shrink-0">
@@ -186,8 +170,8 @@ $action = $_GET['action'] ?? '';
 
                     for ($day = 1; $day <= $total_days_in_month; $day++):
                         $current_date_str = sprintf('%04d-%02d-%02d', $year, $month, $day);
-                        $is_today = ($current_date_str == date('Y-m-d'));
-                        $day_events =$events_by_date[$current_date_str] ?? [];$formatted_date_str = $day . ' ' .$thai_months[$month] . ' ' .$thai_year;
+                        $is_today = ($current_date_str == date('d-m-Y', strtotime(date('d-m-Y'))));
+                        $day_events = $events_by_date[$current_date_str] ?? [];$formatted_date_str = $day . ' ' .$thai_months[$month] . ' ' .$thai_year;
                     ?>
                         <div onclick="openDayModal('<?= $current_date_str ?>', '<?= $formatted_date_str ?>')"
                             class="h-28 lg:h-36 bg-white rounded-2xl border <?= $is_today ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200' ?> p-2 lg:p-3 flex flex-col justify-between hover:border-emerald-600 hover:shadow-md transition-all cursor-pointer relative overflow-hidden group">
@@ -202,18 +186,20 @@ $action = $_GET['action'] ?? '';
                             </div>
 
                             <div class="flex-1 overflow-y-auto space-y-1 mt-1 lg:mt-2">
-                                <?php foreach (array_slice($day_events, 0, 3) as $ev):$status_ev = $ev['status'] ?? 'pending';$badge_class = match ($status_ev) {
+                                <?php foreach (array_slice($day_events, 0, 3) as$ev):
+                                    $status_ev =$ev['status'] ?? 'pending';
+                                    $badge_class = match ($status_ev) {
                                         'in_progress' => 'bg-blue-100 text-blue-800 border-blue-300',
                                         'completed'   => 'bg-emerald-100 text-emerald-800 border-emerald-300',
                                         'cancelled'   => 'bg-rose-100 text-rose-800 border-rose-300',
                                         default       => 'bg-amber-100 text-amber-800 border-amber-300',
-                                    };$time_display = !empty($ev['start_time']) ? substr($ev['start_time'], 0, 5) : '';
-                                    $u_name =$ev['user_name'] ?? '';
+                                    };
+                                    $time_display = !empty($ev['start_time']) ? substr($ev['start_time'], 0, 5) : '';$team_label = !empty($ev['installation_team']) ? ' [ทีม ' . $ev['installation_team'] . ']' : '';
                                 ?>
                                     <div class="<?= $badge_class ?> text-[10px] lg:text-[11px] font-bold px-1.5 lg:px-2 py-1 rounded-lg truncate border shadow-2xs flex items-center justify-between gap-1">
                                         <div class="flex items-center gap-1 truncate">
                                             <?php if ($time_display): ?><span class="opacity-75 shrink-0"><?= $time_display ?></span><?php endif; ?>
-                                            <span class="truncate"><?= htmlspecialchars($ev['title'], ENT_QUOTES, 'UTF-8') ?></span>
+                                            <span class="truncate"><?= htmlspecialchars($ev['title'] .$team_label, ENT_QUOTES, 'UTF-8') ?></span>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
@@ -275,14 +261,20 @@ $action = $_GET['action'] ?? '';
                     <input type="text" id="inputTitle" name="title" required placeholder="เช่น ติดตั้งแผงโซล่าเซลล์..." class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
                 </div>
 
-                <div class="space-y-1.5">
-                    <label class="block text-sm font-semibold text-slate-700">ผู้รับผิดชอบ / ผู้ลงงาน</label>
-                    <select id="inputUserId" name="user_id" class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-slate-50/50 focus:outline-none focus:border-emerald-600 font-medium">
-                        <option value="">-- ใช้ผู้ใช้งานปัจจุบันที่ล็อกอิน --</option>
-                        <?php foreach ($usersList as$usr): ?>
-                            <option value="<?= $usr['id'] ?>"><?= htmlspecialchars($usr['display_name'], ENT_QUOTES, 'UTF-8') ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                <!-- เลือกทีมติดตั้งได้สูงสุด 3 ทีมพร้อมกัน (ใช้ Checkbox) -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-semibold text-slate-700">ทีมติดตั้ง (เลือกได้มากกว่า 1 ทีม)</label>
+                    <div class="flex items-center gap-6 bg-slate-50/50 border border-slate-200 p-3.5 rounded-2xl">
+                        <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
+                            <input type="checkbox" name="installation_team[]" value="W1" class="team-checkbox w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"> ทีม W1
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
+                            <input type="checkbox" name="installation_team[]" value="W2" class="team-checkbox w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"> ทีม W2
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
+                            <input type="checkbox" name="installation_team[]" value="W3" class="team-checkbox w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"> ทีม W3
+                        </label>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -381,20 +373,11 @@ $action = $_GET['action'] ?? '';
         let deleteTargetId = null;
         let currentSelectedDate = null;
 
-        // ควบคุมสำหรับมือถือ (Slide เปิด-ปิด)
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebar-overlay');
-            
             sidebar.classList.toggle('-translate-x-full');
             overlay.classList.toggle('hidden');
-        }
-
-        // ควบคุมสำหรับคอมพิวเตอร์ (ซ่อนแถบเมนูให้พับเก็บซ้ายสุด)
-        function toggleDesktopSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('lg:-ml-64');
-            sidebar.classList.toggle('lg:opacity-0');
         }
 
         function escapeHtml(text) {
@@ -433,12 +416,20 @@ $action = $_GET['action'] ?? '';
             if (allEvents[dateStr] && allEvents[dateStr].length > 0) {
                 allEvents[dateStr].forEach(ev => {
                     let startTime = ev.start_time ? ev.start_time.substring(0, 5) : '';
-                    let endTime = ev.end_time ? ' - ' + ev.end_time.substring(0, 5) : '';
+                    let endTime = ev.end_time ? ' ถึง ' + ev.end_time.substring(0, 5) : '';
                     let statusBadge = matchStatusBadge(ev.status || 'pending');
                     let sDate = ev.start_date;
                     let eDate = ev.actual_end_date;
                     let dateRangeText = (sDate === eDate) ? sDate : `${sDate} ถึง ${eDate}`;
                     let userName = ev.user_name || 'ไม่ระบุผู้ลงงาน';
+                    
+                    let teamBadge = '';
+                    if (ev.installation_team) {
+                        let teams = ev.installation_team.split(',');
+                        teams.forEach(t => {
+                            teamBadge += `<span class="bg-indigo-100 text-indigo-800 border border-indigo-300 px-2 py-0.5 rounded-full text-[10px] font-bold ml-1"><i class="fa-solid fa-users mr-1"></i>ทีม ${escapeHtml(t.trim())}</span>`;
+                        });
+                    }
 
                     let itemDiv = document.createElement('div');
                     itemDiv.className = 'bg-slate-50 border border-slate-200/80 p-4 rounded-2xl space-y-2';
@@ -451,11 +442,14 @@ $action = $_GET['action'] ?? '';
                             </span>
                             ${statusBadge}
                         </div>
-                        <h5 class="text-sm font-bold text-slate-900">${escapeHtml(ev.title)}</h5>
+                        <div class="flex items-center justify-between flex-wrap gap-1">
+                            <h5 class="text-sm font-bold text-slate-900">${escapeHtml(ev.title)}</h5>
+                            <div>${teamBadge}</div>
+                        </div>
                         <p class="text-xs text-slate-500">${escapeHtml(ev.details || 'ไม่มีรายละเอียดเพิ่มเติม')}</p>
                         
                         <div class="text-xs text-slate-600 bg-white p-2 rounded-xl border border-slate-200/60 flex items-center justify-between mt-1">
-                            <span class="font-medium text-slate-500"><i class="fa-solid fa-user-check text-emerald-600 mr-1.5"></i> ผู้รับผิดชอบ:</span>
+                            <span class="font-medium text-slate-500"><i class="fa-solid fa-user-check text-emerald-600 mr-1.5"></i> ผู้รับผิดชอบ</span>
                             <span class="font-bold text-slate-800">${escapeHtml(userName)}</span>
                         </div>
 
@@ -489,7 +483,18 @@ $action = $_GET['action'] ?? '';
 
             document.getElementById('formEventId').value = ev.id;
             document.getElementById('inputTitle').value = ev.title || '';
-            document.getElementById('inputUserId').value = ev.user_id || '';
+            
+            // เคลียร์ค่า Checkbox ทีมติดตั้งทั้งหมดก่อน
+            document.querySelectorAll('.team-checkbox').forEach(cb => cb.checked = false);
+            // ติ๊กเลือกตามข้อมูลที่มี
+            if (ev.installation_team) {
+                let teams = ev.installation_team.split(',');
+                teams.forEach(t => {
+                    let cb = document.querySelector(`.team-checkbox[value="${t.trim()}"]`);
+                    if (cb) cb.checked = true;
+                });
+            }
+
             document.getElementById('inputStartDate').value = ev.start_date || currentSelectedDate;
             document.getElementById('inputEndDate').value = ev.actual_end_date || ev.start_date || currentSelectedDate;
             document.getElementById('inputStartTime').value = ev.start_time ? ev.start_time.substring(0, 5) : '09:00';
@@ -507,7 +512,7 @@ $action = $_GET['action'] ?? '';
         function resetFormToCreate() {
             document.getElementById('formEventId').value = '';
             document.getElementById('inputTitle').value = '';
-            document.getElementById('inputUserId').value = '';
+            document.querySelectorAll('.team-checkbox').forEach(cb => cb.checked = false);
             document.getElementById('inputStartDate').value = currentSelectedDate || '';
             document.getElementById('inputEndDate').value = currentSelectedDate || '';
             document.getElementById('inputStartTime').value = '09:00';
@@ -529,17 +534,15 @@ $action = $_GET['action'] ?? '';
             document.getElementById('deleteConfirmModal').classList.remove('hidden');
         }
 
-        function closeDeleteModal() {
-            deleteTargetId = null;
-            document.getElementById('deleteConfirmModal').classList.add('hidden');
+        function executeDelete() {
+            if (!deleteTargetId) return;
+            showLoadingPopup();
+            window.location.href = 'calendar_process.php?action=delete&id=' + deleteTargetId + '&redirect_month=<?= $month ?>&redirect_year=<?= $year ?>';
         }
 
-        function executeDelete() {
-            if (deleteTargetId) {
-                document.getElementById('deleteConfirmModal').classList.add('hidden');
-                document.getElementById('loadingPopup').classList.remove('hidden');
-                window.location.href = `calendar_delete.php?delete_id=${deleteTargetId}&month=<?= $month ?>&year=<?= $year ?>&csrf_token=<?= $_SESSION['csrf_token'] ?>`;
-            }
+        function closeDeleteModal() {
+            document.getElementById('deleteConfirmModal').classList.add('hidden');
+            deleteTargetId = null;
         }
 
         function closeModal() {
@@ -548,13 +551,14 @@ $action = $_GET['action'] ?? '';
 
         function closeSuccessPopup() {
             const popup = document.getElementById('successPopup');
-            if (popup) popup.remove();
+            if (popup) {
+                popup.remove();
+            }
             const url = new URL(window.location.href);
             url.searchParams.delete('status');
             url.searchParams.delete('action');
-            window.history.replaceState({}, document.title, url);
+            window.history.replaceState({}, document.title, url.toString());
         }
     </script>
 </body>
-
 </html>

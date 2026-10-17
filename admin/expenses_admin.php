@@ -17,7 +17,7 @@ try {
         ORDER BY e.created_at DESC LIMIT 50
     ");
     $expensesList = $stmt_exp->fetchAll(PDO::FETCH_ASSOC);
-    
+
     $stmt_total_exp = $pdo->query("SELECT SUM(amount) as total FROM expenses");
     $totalGeneralExpense = $stmt_total_exp->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
 } catch (PDOException $e) {
@@ -54,6 +54,7 @@ try {
 ?>
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -66,33 +67,77 @@ try {
         tailwind.config = {
             theme: {
                 extend: {
-                    fontFamily: { 
+                    fontFamily: {
                         sans: ['Prompt', 'Inter', 'sans-serif'],
                         sarabun: ['Sarabun', 'sans-serif']
                     },
-                    colors: { darkSidebar: '#000007', brandGreen: '#059669' }
+                    colors: {
+                        darkSidebar: '#000007',
+                        brandGreen: '#059669'
+                    }
                 }
             }
         }
     </script>
     <style>
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
-        .font-sarabun { font-family: 'Sarabun', sans-serif !important; }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 4px;
+        }
+
+        .font-sarabun {
+            font-family: 'Sarabun', sans-serif !important;
+        }
+
         @media print {
-            @page { size: A4 portrait; margin: 8mm; }
-            body { background: white !important; color: #0f172a !important; font-family: 'Sarabun', sans-serif !important; }
-            #sidebarWrapper, #sidebarBackdrop, header, .no-print { display: none !important; }
-            body * { visibility: hidden; }
-            #printableExpenseReport, #printableExpenseReport * { visibility: visible; }
+            @page {
+                size: A4 portrait;
+                margin: 8mm;
+            }
+
+            body {
+                background: white !important;
+                color: #0f172a !important;
+                font-family: 'Sarabun', sans-serif !important;
+            }
+
+            #sidebarWrapper,
+            #sidebarBackdrop,
+            header,
+            .no-print {
+                display: none !important;
+            }
+
+            body * {
+                visibility: hidden;
+            }
+
+            #printableExpenseReport,
+            #printableExpenseReport * {
+                visibility: visible;
+            }
+
             #printableExpenseReport {
-                position: absolute; left: 0; top: 0; width: 100%;
-                background: white !important; z-index: 99999; padding: 0 !important;
-                margin: 0 !important; border: none !important; box-shadow: none !important;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                background: white !important;
+                z-index: 99999;
+                padding: 0 !important;
+                margin: 0 !important;
+                border: none !important;
+                box-shadow: none !important;
             }
         }
     </style>
 </head>
+
 <body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
 
     <!-- Sidebar สำหรับมือถือและเดสก์ท็อป -->
@@ -103,7 +148,7 @@ try {
 
     <!-- Main Content -->
     <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100 w-full">
-        
+
         <!-- Header Bar -->
         <header class="h-20 bg-white border-b border-slate-200/80 flex items-center justify-between px-6 md:px-10 shrink-0 z-10 shadow-xs">
             <div class="flex items-center gap-3">
@@ -124,7 +169,7 @@ try {
 
         <!-- Main Body -->
         <div class="flex-1 overflow-y-auto p-4 md:p-10 space-y-6">
-            
+
             <!-- แจ้งเตือนสถานะ -->
             <?php if (isset($_GET['status'])): ?>
                 <?php if ($_GET['status'] == 'success'): ?>
@@ -146,7 +191,7 @@ try {
                     <h3 class="text-base md:text-lg font-bold text-slate-900">สรุปต้นทุนอุปกรณ์แต่ละโครงการ</h3>
                     <p class="text-xs text-slate-500 mt-1">คำนวณอัตโนมัติจากมูลค่าอุปกรณ์ที่เบิกออก หักลบด้วยอุปกรณ์ที่รับคืนคลัง คูณด้วยราคาต้นทุนจริง</p>
                 </div>
-                
+
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse text-xs min-w-[650px]">
                         <thead>
@@ -159,7 +204,7 @@ try {
                         </thead>
                         <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
                             <?php if (!empty($projectsCost)): ?>
-                                <?php foreach ($projectsCost as $proj): 
+                                <?php foreach ($projectsCost as $proj):
                                     $net_cost = $proj['total_out'] - $proj['total_return'];
                                 ?>
                                     <tr class="hover:bg-slate-50/80 transition-all">
@@ -242,7 +287,7 @@ try {
             <!-- ส่วนที่ 3: ตารางประวัติค่าใช้จ่ายทั่วไปพร้อมแสดงภาพสลิป -->
             <div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden p-6 space-y-4">
                 <h3 class="text-base font-bold text-slate-900 px-2">ประวัติค่าใช้จ่ายทั่วไปล่าสุด</h3>
-                
+
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse text-xs min-w-[700px]">
                         <thead>
@@ -273,8 +318,8 @@ try {
                                         <td class="py-3.5 px-4 text-center">
                                             <?php if (!empty($row['receipt_image'])): ?>
                                                 <div class="flex items-center justify-center gap-2">
-                                                    <img src="<?= htmlspecialchars($row['receipt_image']) ?>" alt="สลิป" onclick="openImageModal('<?= htmlspecialchars($row['receipt_image']) ?>')" class="w-10 h-10 object-cover rounded-xl border border-slate-200 cursor-pointer hover:opacity-80 transition-opacity shadow-xs">
-                                                    <button onclick="openImageModal('<?= htmlspecialchars($row['receipt_image']) ?>')" class="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2.5 py-1 rounded-xl text-[11px] font-bold inline-flex items-center gap-1">
+                                                    <img src="../<?= htmlspecialchars($row['receipt_image']) ?>" alt="สลิป" onclick="openImageModal('../<?= htmlspecialchars($row['receipt_image']) ?>')" class="w-10 h-10 object-cover rounded-xl border border-slate-200 cursor-pointer hover:opacity-80 transition-opacity shadow-xs">
+                                                    <button onclick="openImageModal('../<?= htmlspecialchars($row['receipt_image']) ?>')" class="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2.5 py-1 rounded-xl text-[11px] font-bold inline-flex items-center gap-1">
                                                         <i class="fa-solid fa-expand"></i> ดูสลิป
                                                     </button>
                                                 </div>
@@ -360,15 +405,18 @@ try {
                         </thead>
                         <tbody class="divide-y divide-slate-200">
                             <?php if (!empty($expensesList)): foreach ($expensesList as $row): ?>
-                            <tr>
-                                <td class="py-2 px-3 border border-slate-300 text-xs"><?= htmlspecialchars($row['created_at']) ?></td>
-                                <td class="py-2 px-3 border border-slate-300 font-semibold"><?= htmlspecialchars($row['project_name'] ?? 'ส่วนกลาง') ?></td>
-                                <td class="py-2 px-3 border border-slate-300"><?= htmlspecialchars($row['title']) ?></td>
-                                <td class="py-2 px-3 border border-slate-300"><?= htmlspecialchars($row['category']) ?></td>
-                                <td class="py-2 px-3 border border-slate-300 text-right font-bold text-rose-700"><?= number_format($row['amount'], 2) ?></td>
-                            </tr>
-                            <?php endforeach; else: ?>
-                            <tr><td colspan="5" class="py-3 text-center text-slate-500 border border-slate-300">ไม่มีข้อมูลค่าใช้จ่าย</td></tr>
+                                    <tr>
+                                        <td class="py-2 px-3 border border-slate-300 text-xs"><?= htmlspecialchars($row['created_at']) ?></td>
+                                        <td class="py-2 px-3 border border-slate-300 font-semibold"><?= htmlspecialchars($row['project_name'] ?? 'ส่วนกลาง') ?></td>
+                                        <td class="py-2 px-3 border border-slate-300"><?= htmlspecialchars($row['title']) ?></td>
+                                        <td class="py-2 px-3 border border-slate-300"><?= htmlspecialchars($row['category']) ?></td>
+                                        <td class="py-2 px-3 border border-slate-300 text-right font-bold text-rose-700"><?= number_format($row['amount'], 2) ?></td>
+                                    </tr>
+                                <?php endforeach;
+                            else: ?>
+                                <tr>
+                                    <td colspan="5" class="py-3 text-center text-slate-500 border border-slate-300">ไม่มีข้อมูลค่าใช้จ่าย</td>
+                                </tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
@@ -407,6 +455,7 @@ try {
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         }
+
         function closeImageModal() {
             let modal = document.getElementById('imageModal');
             modal.classList.remove('flex');
@@ -418,6 +467,7 @@ try {
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         }
+
         function closePrintModal() {
             let modal = document.getElementById('printReportModal');
             modal.classList.remove('flex');
@@ -425,4 +475,5 @@ try {
         }
     </script>
 </body>
+
 </html>

@@ -143,7 +143,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>รายการใบเบิกที่อนุมัติแล้ว - SolarStock </title>
+    <title>รายการใบเบิกที่อนุมัติแล้ว - SolarStock</title>
     <link rel="icon" type="image/png" href="../Pic/456456.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -184,7 +184,6 @@ try {
                 </button>
                 <div>
                     <h2 class="text-base md:text-xl font-bold text-slate-900 tracking-tight">รายการใบเบิกที่อนุมัติแล้ว</h2>
-                    <!-- <p class="text-xs text-slate-500 hidden sm:block mt-0.5">จัดการจ่ายสินค้า รับคืน และตัด-คืนสต็อกสินค้าอัตโนมัติพร้อมบันทึกประวัติราคา</p> -->
                 </div>
             </div>
             <div class="flex items-center gap-3">
@@ -248,7 +247,7 @@ try {
                     <h3 class="font-bold text-slate-900 text-base md:text-lg"><i class="fa-solid fa-boxes-packing text-emerald-600 me-2"></i> บันทึกการจ่ายและรับคืนสินค้า ใบเบิก #<span id="modalReqId"></span></h3>
                     <p class="text-xs text-slate-500 font-medium" id="modalProjectName">-</p>
                 </div>
-                <button type="button" onclick="closeDetailModal()" class="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition">
+                <button type="button" onclick="closeDetailModal()" class="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition cursor-pointer">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
@@ -262,13 +261,12 @@ try {
                 </div>
 
                 <div class="flex flex-col sm:flex-row justify-between items-center gap-2.5 pt-5 border-t border-slate-100">
-                    <!-- ปุ่มพิมพ์ PDF เอกสาร -->
                     <button type="button" onclick="printRequisition()" class="bg-slate-700 hover:bg-slate-800 text-white px-4 py-3 rounded-2xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer w-full sm:w-auto">
                         <i class="fa-solid fa-print"></i> พิมพ์ใบเบิก (PDF)
                     </button>
 
                     <div class="flex flex-col sm:flex-row gap-2.5 w-full sm:w-auto">
-                        <button type="button" onclick="closeDetailModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-3 rounded-2xl font-bold text-xs transition-all">
+                        <button type="button" onclick="closeDetailModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-3 rounded-2xl font-bold text-xs transition-all cursor-pointer">
                             ปิดหน้าต่าง
                         </button>
                         <button type="button" onclick="submitForm('save_issue')" class="bg-amber-600 hover:bg-amber-700 text-white px-5 py-3 rounded-2xl font-bold text-xs transition-all shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 cursor-pointer">
@@ -323,7 +321,7 @@ try {
             const form = document.getElementById('requisitionForm');
             const formData = new FormData(form);
 
-            fetch('user_requisitions.php', {
+            fetch('', {
                 method: 'POST',
                 body: formData
             })
@@ -338,16 +336,17 @@ try {
 
                     if (actionType === 'complete_requisition') {
                         setTimeout(() => {
-                            closeDetailModal();
-                        }, 800);
+                            window.location.href = 'stock_history.php';
+                        }, 1200);
                     } else {
                         loadModalData(currentReqId);
+                        setTimeout(() => alertBox.classList.add('hidden'), 4000);
                     }
                 } else {
                     alertBox.className = 'px-5 py-4 rounded-2xl text-sm font-medium flex items-center gap-3 shadow-xs bg-rose-50 text-rose-800 border border-rose-200';
                     alertBox.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-600 text-lg"></i><span>' + data.message + '</span>';
+                    setTimeout(() => alertBox.classList.add('hidden'), 4000);
                 }
-                setTimeout(() => alertBox.classList.add('hidden'), 4000);
             })
             .catch(error => {
                 alert('เกิดข้อผิดพลาดในการส่งข้อมูลไปยังเครื่องแม่ข่าย');

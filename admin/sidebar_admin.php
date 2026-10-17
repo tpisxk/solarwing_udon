@@ -4,12 +4,21 @@ $current_page = basename($_SERVER['PHP_SELF'], ".php");
 
 $display_name = $_SESSION['name'] ?? '';
 $display_role = $_SESSION['role'] ?? $_SESSION['user_role'] ?? 'Admin';
+
 // นับจำนวนผู้ใช้งานทั้งหมดในตาราง users
 try {
     $stmt_user_count = $pdo->query("SELECT COUNT(*) FROM users");
     $user_count = $stmt_user_count->fetchColumn();
 } catch (PDOException $e) {
-    $user_count = 0; // เผื่อกรณีเกิด Error ให้แสดงเป็น 0
+    $user_count = 0;
+}
+
+// นับจำนวนใบเบิกที่รอตรวจสอบ (Pending) เพื่อนำมาแสดงแจ้งเตือนที่ Sidebar
+try {
+    $stmt_req_count = $pdo->query("SELECT COUNT(*) FROM requisitions WHERE status = 'Pending'");
+    $pending_requisitions_count = $stmt_req_count->fetchColumn();
+} catch (PDOException $e) {
+    $pending_requisitions_count = 0;
 }
 ?>
 <!-- 🌐 ส่วนเมนูด้านซ้าย (Sidebar) -->
@@ -59,7 +68,7 @@ try {
         <!-- Header โลโก้ -->
         <div id="sidebarHeader" class="h-20 flex items-center px-6 border-b border-slate-800/80 gap-3 transition-colors duration-200">
             <img src="../Pic/SW.png" alt="SW.png" class="w-8 h-8 object-contain">
-            <h1 id="sidebarTitle" class="text-white font-bold text-lg tracking-tight">SolarWing <span class="text-emerald-500">Stock</span></h1>
+            <h1 id="sidebarTitle" class="text-white font-bold text-lg tracking-tight">SolarWing <span class="text-emerald-500">Management</span></h1>
         </div>
 
         <!-- รายการเมนู -->
@@ -86,15 +95,27 @@ try {
                 <i class="fas fa-plus-circle w-5 text-center text-sm"></i> เพิ่มสินค้าใหม่
             </a>
             
-            <a href="admin_requisitions.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'admin_requisitions') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
-                <i class="fas fa-circle-check w-5 text-center text-sm"></i> ตรวจสอบและอนุมัติใบเบิกของ
+            <!-- เมนูตรวจสอบและอนุมัติใบเบิกของ พร้อมป้ายแจ้งเตือน (Badge) -->
+            <a href="admin_requisitions.php" class="menu-item w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'admin_requisitions') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+                <div class="flex items-center gap-3.5">
+                    <i class="fas fa-circle-check w-5 text-center text-sm"></i> ตรวจสอบใบเบิกของ
+                </div>
+                <?php if ($pending_requisitions_count > 0): ?>
+                    <span class="badge-count bg-rose-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full animate-pulse shadow-sm">
+                        <?= number_format($pending_requisitions_count) ?>
+                    </span>
+                <?php else: ?>
+                    <span class="badge-count bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full">0</span>
+                <?php endif; ?>
             </a>
-
-
+            <a href="admin_procurement.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'admin_procurement') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+                <i class="fas fa-cart-shopping w-5 text-center text-sm"></i> จัดซื้อสินค้า
+            </a>
             <?php
             // ตรวจสอบว่าอยู่หน้าในกลุ่มสถานที่ติดตั้งหรือไม่
             $is_location_active = ($current_page == 'add_installation_admin' || $current_page == 'project_list_admin');
             ?>
+            
             <!-- 📂 เมนูสถานที่ติดตั้ง (กางค้างไว้ทันทีเมื่ออยู่หน้าย่อย) -->
             <div class="space-y-1">
                 <button onclick="toggleLocationsDropdown()" class="menu-item w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all <?= $is_location_active ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
@@ -124,14 +145,6 @@ try {
                 <hr id="sidebarDivider" class="border-slate-800/80 transition-colors duration-200">
             </div>
 
-            <!-- <a href="orders_admin.php" class="menu-item w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'orders_admin') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
-                <div class="flex items-center gap-3.5"><i class="fas fa-shopping-bag w-5 text-center text-sm"></i> สั่งซื้อสินค้า</div>
-                <span class="badge-count bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full">0</span>
-            </a>
-            <a href="pending_admin.php" class="menu-item w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'pending_admin') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
-                <div class="flex items-center gap-3.5"><i class="fas fa-shipping-fast w-5 text-center text-sm"></i> รอรับสินค้า</div>
-                <span class="bg-emerald-950/80 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-800/50">0</span>
-            </a> -->
             <a href="manage_users.php" class="menu-item w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all <?= ($current_page == 'manage_users') ? 'bg-brandGreen text-white shadow-md shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
                 <div class="flex items-center gap-3.5">
                     <i class="fas fa-circle-user w-5 text-center text-sm"></i> จัดการผู้ใช้งาน
@@ -236,10 +249,6 @@ try {
                     item.className = "menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all text-slate-600 hover:bg-slate-100 hover:text-slate-900";
                 }
             });
-
-            badgeCounts.forEach(badge => {
-                badge.className = "badge-count bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full";
-            });
         }
 
         function applyDarkSidebar() {
@@ -259,11 +268,8 @@ try {
                     item.className = "menu-item w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all text-slate-300 hover:bg-slate-800/60 hover:text-white";
                 }
             });
-
-            badgeCounts.forEach(badge => {
-                badge.className = "badge-count bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full";
-            });
         }
+
         // ตรวจสอบและบังคับใช้ธีม Sidebar ทันทีที่โหลดหน้า เพื่อป้องกันการกะพริบหรือสลับเอง
         (function() {
             if (localStorage.getItem('sidebar_theme') === 'light') {
