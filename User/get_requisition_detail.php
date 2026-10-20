@@ -2,80 +2,83 @@
 require_once '../db/conn.php';
 require_once '../auth_check.php';
 
-$req_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+$req_id = intval($_GET['id'] ?? 0);
 
-if ($req_id <= 0) {
-    echo '<div class="text-center py-6 text-rose-500">ไม่พบรหัสใบเบิก</div>';
-    exit;
+if ($req_id > 0) {
+    try {
+        $stmt = $pdo->prepare("
+            SELECT ri.*, p.name AS product_name, p.sku, p.stock_quantity 
+            FROM requisition_items ri
+            LEFT JOIN products p ON ri.product_id = p.id
+            WHERE ri.requisition_id = ?
+        ");
+        $stmt->execute([$req_id]);
+        $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (!empty($items)) {
+            echo '<div class="overflow-x-auto border border-slate-200 rounded-2xl">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase">
+                                <th class="py-3 px-4">ลำดับ</th>
+                                <th class="py-3 px-4">รายการสินค้า / SKU</th>
+                                <th class="py-3 px-4 text-center">คงเหลือ</th>
+                                <th class="py-3 px-4 text-center">จำนวนเบิก</th>
+                                <th class="py-3 px-4 text-center">จ่ายออก</th>
+                                <th class="py-3 px-4 text-center">รับเข้า</th>
+                                <th class="py-3 px-4">หมายเหตุ</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 font-medium text-slate-700">';
+
+            $index = 1;
+            foreach ($items as $item) {
+                $item_id      = intval($item['id']);
+                $product_id   = intval($item['product_id']);
+                $product_name = htmlspecialchars($item['product_name'] ?? 'ไม่พบสินค้า');
+                $sku          = htmlspecialchars($item['sku'] ?? '-');
+                $stock_qty    = intval($item['stock_quantity'] ?? 0);
+                $req_qty      = intval($item['quantity'] ?? 0);
+                $issued_qty   = intval($item['issued_qty'] ?? 0);
+                $returned_qty = intval($item['returned_qty'] ?? 0);
+                $remark       = htmlspecialchars($item['remark'] ?? '');
+
+                echo '<tr>';
+                echo '<input type="hidden" name="item_id[]" value="' . $item_id . '">';
+                echo '<input type="hidden" name="product_id[]" value="' . $product_id . '">';
+                
+                echo '<td class="py-3.5 px-4 text-slate-500 font-bold">' . $index++ . '</td>';
+                echo '<td class="py-3.5 px-4 font-bold text-slate-900">' . $product_name . '<br><span class="text-[10px] text-slate-400 font-normal">SKU: ' . $sku . '</span></td>';
+                echo '<td class="py-3.5 px-4 text-center font-semibold text-slate-600">' . number_format($stock_qty) . '</td>';
+                echo '<td class="py-3.5 px-4 text-center font-bold text-blue-600">' . number_format($req_qty) . ' ชิ้น</td>';
+                
+                // ช่องกรอกจำนวนจ่ายออก
+                echo '<td class="py-3.5 px-4 text-center">
+                        <input type="number" name="issued_qty[]" min="0" value="' . $issued_qty . '" class="w-20 px-3 py-1.5 border border-slate-200 rounded-xl text-xs text-center bg-slate-50 font-bold focus:outline-none focus:border-emerald-600">
+                      </td>';
+
+                // ช่องกรอกจำนวนรับคืน
+                echo '<td class="py-3.5 px-4 text-center">
+                        <input type="number" name="returned_qty[]" min="0" value="' . $returned_qty . '" class="w-20 px-3 py-1.5 border border-slate-200 rounded-xl text-xs text-center bg-slate-50 font-bold focus:outline-none focus:border-emerald-600">
+                      </td>';
+
+                // ช่องหมายเหตุรายชิ้น
+                echo '<td class="py-3.5 px-4">
+                        <input type="text" name="item_remark[]" value="' . $remark . '" placeholder="ระบุหมายเหตุ..." class="w-full px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600">
+                      </td>';
+
+                echo '</tr>';
+            }
+
+            echo '    </tbody>
+                    </table>
+                  </div>';
+        } else {
+            echo '<div class="text-center py-8 text-slate-400">ไม่พบรายการสินค้าในใบเบิกนี้</div>';
+        }
+    } catch (Exception $e) {
+        echo '<div class="text-center py-8 text-rose-500">เกิดข้อผิดพลาดในการโหลดข้อมูล: ' . $e->getMessage() . '</div>';
+    }
+} else {
+    echo '<div class="text-center py-8 text-slate-400">ไม่พบรหัสใบเบิก</div>';
 }
-
-try {
-    // ใช้ stock_quantity ตามโครงสร้างตารางจริง
-    $stmt = $pdo->prepare("SELECT ri.*, p.name as product_name, p.sku as product_sku, p.stock_quantity FROM requisition_items ri LEFT JOIN products p ON ri.product_id = p.id WHERE ri.requisition_id = ?");
-    $stmt->execute([$req_id]);
-    $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $items = [];
-}
-?>
-
-<?php if (empty($items)): ?>
-    <div class="text-center py-6 text-slate-400">ไม่พบรายการสินค้าในใบเบิกนี้</div>
-<?php else: ?>
-    <div class="overflow-x-auto rounded-2xl border border-slate-200">
-        <table class="w-full text-left border-collapse text-xs">
-            <thead>
-                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold">
-                    <th class="py-3 px-3 text-center w-12">ลำดับ</th>
-                    <th class="py-3 px-4">รายการสินค้า / SKU</th>
-                    <th class="py-3 px-3 text-center">คงเหลือ</th>
-                    <th class="py-3 px-3 text-center w-24">จำนวนเบิก</th>
-                    <th class="py-3 px-3 text-center w-28 text-blue-700">จ่ายออก</th>
-                    <th class="py-3 px-3 text-center w-28 text-emerald-700">รับเข้า</th>
-                    <th class="py-3 px-4">หมายเหตุ</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <?php foreach ($items as $index => $item): 
-                    $p_name = htmlspecialchars($item['product_name'] ?? 'สินค้าไม่ระบุชื่อ');
-                    $p_sku = !empty($item['product_sku']) ? ' (SKU: ' . htmlspecialchars($item['product_sku']) . ')' : '';
-                    $req_qty = intval($item['quantity'] ?? 0);
-                    
-                    // กำหนดให้ค่าเริ่มต้นของช่องจ่ายออก (issued_qty) เท่ากับจำนวนที่ขอเบิก ($req_qty) 
-                    // หากเคยบันทึกค่าไว้แล้วและมากกว่า 0 ให้ใช้ค่านั้น แต่ถ้ายังไม่เคยบันทึก (เป็น 0 หรือค่าว่าง) ให้ยึดตามยอดเบิก
-                    $saved_issued = intval($item['issued_qty'] ?? 0);
-                    $issued_qty = ($saved_issued > 0) ? $saved_issued : $req_qty;
-
-                    $returned_qty = isset($item['returned_qty']) ? intval($item['returned_qty']) : 0;
-                ?>
-                <tr>
-                    <td class="py-3 px-3 text-center font-bold text-slate-400"><?= $index + 1 ?></td>
-                    <td class="py-3 px-4 font-semibold text-slate-800">
-                        <?= $p_name . $p_sku ?>
-                        <input type="hidden" name="item_id[]" value="<?= $item['id'] ?>">
-                        <input type="hidden" name="product_id[]" value="<?= $item['product_id'] ?? 0 ?>">
-                    </td>
-                    <td class="py-3 px-3 text-center font-bold text-slate-600">
-                        <?= intval($item['stock_quantity'] ?? 0) ?>
-                    </td>
-                    <td class="py-3 px-3 text-center font-bold text-slate-700">
-                        <?= $req_qty ?> ชิ้น
-                    </td>
-                    <td class="py-3 px-3 text-center">
-                        <!-- ล็อกไม่ให้กรอกเกินจำนวนเบิก ($req_qty) และเริ่มต้นเท่ากับจำนวนเบิก -->
-                        <input type="number" name="issued_qty[]" min="0" max="<?= $req_qty ?>" value="<?= $issued_qty ?>" 
-                               oninput="if(parseInt(this.value) > <?= $req_qty ?>) this.value = <?= $req_qty ?>;"
-                               class="w-24 px-2.5 py-1.5 text-center rounded-xl border border-blue-300 bg-blue-50/50 font-bold text-blue-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs">
-                    </td>
-                    <td class="py-3 px-3 text-center">
-                        <input type="number" name="returned_qty[]" min="0" value="<?= $returned_qty ?>" class="w-24 px-2.5 py-1.5 text-center rounded-xl border border-emerald-300 bg-emerald-50/50 font-bold text-emerald-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-2xs">
-                    </td>
-                    <td class="py-3 px-4 text-slate-500 text-xs">
-                        <input type="text" name="item_remark[]" value="<?= htmlspecialchars($item['remark'] ?? '') ?>" placeholder="ระบุหมายเหตุ..." class="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50/50 font-normal focus:outline-none">
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
-<?php endif; ?>

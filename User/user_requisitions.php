@@ -10,7 +10,7 @@ header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
 require_once '../db/conn.php';
 require_once '../auth_check.php';
 
-// Safe Column Additions สำหรับตารางที่เกี่ยวข้อง
+// Safe Column Additions สำหรับโครงสร้างตารางที่เกี่ยวข้อง
 try {
     $pdo->exec("ALTER TABLE requisition_items ADD COLUMN issued_qty INT DEFAULT 0");
 } catch (PDOException $e) {}
@@ -50,7 +50,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt_get_req->execute([$req_id]);
             $req_info = $stmt_get_req->fetch(PDO::FETCH_ASSOC);
             
-            $installation_id = intval($req_info['installation_id'] ?? 0);
+            // ป้องกัน Foreign Key Error: หากไม่มีการระบุโครงการ หรือ installation_id <= 0 ให้กำหนดเป็น NULL
+            $installation_id = (!empty($req_info['installation_id']) && intval($req_info['installation_id']) > 0) 
+                ? intval($req_info['installation_id']) 
+                : null;
+
             $user_id = $_SESSION['user_id'] ?? ($_SESSION['id'] ?? 1);
 
             $stmt_get_old_item = $pdo->prepare("SELECT product_id, issued_qty, returned_qty FROM requisition_items WHERE id = ?");
@@ -94,14 +98,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 $stmt_update_item->execute([$new_issued, $new_returned, $remark, $item_id]);
 
+                // จ่ายสินค้าออก -> หักสต็อกคลัง + บันทึก Transaction
                 if ($p_id > 0 && $diff_issued > 0) {
                     $stmt_deduct_stock->execute([$diff_issued, $p_id]);
-                    $stmt_trans->execute([$p_id, $installation_id, 'out', $diff_issued, $current_cost_price, $user_id, 'REQ-#' . $req_id]);
+                    
+                    $stmt_trans->bindValue(1, $p_id, PDO::PARAM_INT);
+                    if ($installation_id !== null) {
+                        $stmt_trans->bindValue(2, $installation_id, PDO::PARAM_INT);
+                    } else {
+                        $stmt_trans->bindValue(2, null, PDO::PARAM_NULL);
+                    }
+                    $stmt_trans->bindValue(3, 'out', PDO::PARAM_STR);
+                    $stmt_trans->bindValue(4, $diff_issued, PDO::PARAM_INT);
+                    $stmt_trans->bindValue(5, $current_cost_price);
+                    $stmt_trans->bindValue(6, $user_id, PDO::PARAM_INT);
+                    $stmt_trans->bindValue(7, 'REQ-#' . $req_id, PDO::PARAM_STR);
+                    $stmt_trans->execute();
                 }
 
+                // รับคืนสินค้า -> คืนสต็อกเข้าคลัง + บันทึก Transaction
                 if ($p_id > 0 && $diff_returned > 0) {
                     $stmt_add_stock->execute([$diff_returned, $p_id]);
-                    $stmt_trans->execute([$p_id, $installation_id, 'return', $diff_returned, $current_cost_price, $user_id, 'RET-#' . $req_id]);
+                    
+                    $stmt_trans->bindValue(1, $p_id, PDO::PARAM_INT);
+                    if ($installation_id !== null) {
+                        $stmt_trans->bindValue(2, $installation_id, PDO::PARAM_INT);
+                    } else {
+                        $stmt_trans->bindValue(2, null, PDO::PARAM_NULL);
+                    }
+                    $stmt_trans->bindValue(3, 'return', PDO::PARAM_STR);
+                    $stmt_trans->bindValue(4, $diff_returned, PDO::PARAM_INT);
+                    $stmt_trans->bindValue(5, $current_cost_price);
+                    $stmt_trans->bindValue(6, $user_id, PDO::PARAM_INT);
+                    $stmt_trans->bindValue(7, 'RET-#' . $req_id, PDO::PARAM_STR);
+                    $stmt_trans->execute();
                 }
             }
 
