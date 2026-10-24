@@ -14,16 +14,21 @@ $success_msg = '';$error_msg = '';
 function sendLineMessageToMultiple($message, $recipient_ids,$access_token) {
     if (empty($recipient_ids) or !is_array($recipient_ids)) return;
     $url = 'https://api.line.me/v2/bot/message/push';
+    
     foreach ($recipient_ids as$to_id) {
         if (empty($to_id) or strpos($to_id, 'ใส่_User_ID') !== false) continue;
-        $data = ['to' => $to_id, 'messages' => [['type' => 'text', 'text' =>$message]]];
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json', 'Authorization: Bearer ' .$access_token]);
-        curl_exec($ch);
-        curl_close($ch);
+        $data = ['to' =>$to_id, 'messages' => [['type' => 'text', 'text' => $message]]];$options = [
+            'http' => [
+                'method'  => 'POST',
+                'header'  => "Content-Type: application/json\r\n" .
+                             "Authorization: Bearer " . $access_token . "\r\n",
+                'content' => json_encode($data),
+                'ignore_errors' => true
+            ]
+        ];
+        
+        $context = stream_context_create($options);
+        @file_get_contents($url, false,$context);
     }
 }
 
@@ -34,7 +39,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
 
     try {
         if ($action === 'approve') {
-            // อนุมัติใบเบิก (เปลี่ยนสถานะเป็น Approved เท่านั้น ยังไม่ตัดสต็อก)
             $stmt_update =$pdo->prepare("UPDATE requisitions SET status = 'Approved' WHERE id = ?");
             $stmt_update->execute([$req_id]);
 
@@ -90,6 +94,8 @@ try {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SweetAlert2 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -134,14 +140,28 @@ try {
             <div class="max-w-6xl mx-auto space-y-6">
 
                 <?php if (!empty($success_msg)): ?>
-                    <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs font-semibold">
-                        <?= $success_msg ?>
-                    </div>
+                    <script>
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'สำเร็จ!',
+                            text: '<?= $success_msg ?>',
+                            confirmButtonText: 'ตกลง',
+                            confirmButtonColor: '#059669',
+                            timer: 3000,
+                            timerProgressBar: true
+                        });
+                    </script>
                 <?php endif; ?>
                 <?php if (!empty($error_msg)): ?>
-                    <div class="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-2xl text-xs font-semibold">
-                        <?= $error_msg ?>
-                    </div>
+                    <script>
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'เกิดข้อผิดพลาด',
+                            text: '<?= $error_msg ?>',
+                            confirmButtonText: 'ตกลง',
+                            confirmButtonColor: '#e11d48'
+                        });
+                    </script>
                 <?php endif; ?>
 
                 <div class="flex flex-wrap gap-2">
@@ -176,7 +196,9 @@ try {
                                     <?php foreach ($requisitions as$req): ?>
                                         <tr class="hover:bg-slate-50/50">
                                             <td class="py-3 px-4 font-semibold text-slate-900"><?= htmlspecialchars($req['project_name'] ?? '-') ?></td>
-                                            <td class="py-3 px-4"><?= htmlspecialchars($req['req_date'] ?? '-') ?></td>
+                                            <td class="py-3 px-4">
+                                                <?= (!empty($req['req_date']) && $req['req_date'] !== '-') ? date('d/m/Y', strtotime($req['req_date'])) : '-' ?>
+                                            </td>
                                             <td class="py-3 px-4"><?= htmlspecialchars($req['engineer_name'] ?? '-') ?></td>
                                             <td class="py-3 px-4 text-center">
                                                 <?php if($req['status'] === 'Pending'): ?>
@@ -199,18 +221,18 @@ try {
                                                         <i class="fa-solid fa-cart-shopping me-1"></i> สินค้าหมด/จัดซื้อ
                                                     </a>
 
-                                                    <form action="admin_requisitions.php?status=Pending" method="POST" class="inline">
+                                                    <form id="approveForm-<?= $req['id'] ?>" action="admin_requisitions.php?status=Pending" method="POST" class="inline">
                                                         <input type="hidden" name="req_id" value="<?= $req['id'] ?>">
                                                         <input type="hidden" name="action_type" value="approve">
-                                                        <button type="submit" onclick="return confirm('ยืนยันอนุมัติใบเบิกนี้?')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm">
+                                                        <button type="button" onclick="confirmAction(<?= $req['id'] ?>, 'approve')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl font-bold transition-all shadow-sm">
                                                             <i class="fa-solid fa-check me-1"></i> อนุมัติ
                                                         </button>
                                                     </form>
 
-                                                    <form action="admin_requisitions.php?status=Pending" method="POST" class="inline">
+                                                    <form id="rejectForm-<?= $req['id'] ?>" action="admin_requisitions.php?status=Pending" method="POST" class="inline">
                                                         <input type="hidden" name="req_id" value="<?= $req['id'] ?>">
                                                         <input type="hidden" name="action_type" value="reject">
-                                                        <button type="submit" onclick="return confirm('ต้องการปฏิเสธรายการนี้ใช่หรือไม่?')" class="bg-rose-50 hover:bg-rose-100 text-rose-600 px-3 py-1.5 rounded-xl font-bold transition-all">
+                                                        <button type="button" onclick="confirmAction(<?= $req['id'] ?>, 'reject')" class="bg-rose-50 hover:bg-rose-100 text-rose-600 px-3 py-1.5 rounded-xl font-bold transition-all">
                                                             <i class="fa-solid fa-xmark me-1"></i> ปฏิเสธ
                                                         </button>
                                                     </form>
@@ -256,6 +278,24 @@ try {
             const overlay = document.getElementById('sidebar-overlay');
             sidebar.classList.toggle('-translate-x-full');
             overlay.classList.toggle('hidden');
+        }
+
+        function confirmAction(reqId, type) {
+            let isApprove = type === 'approve';
+            Swal.fire({
+                title: isApprove ? 'ยืนยันอนุมัติใบเบิก?' : 'ต้องการปฏิเสธรายการนี้?',
+                text: isApprove ? "ระบบจะทำการอัปเดตสถานะเป็นอนุมัติและแจ้งเตือนไปยังไลน์กลุ่ม" : "รายการนี้จะถูกเปลี่ยนสถานะเป็นไม่อนุมัติ",
+                icon: isApprove ? 'question' : 'warning',
+                showCancelButton: true,
+                confirmButtonColor: isApprove ? '#059669' : '#e11d48',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: isApprove ? 'ยืนยัน, อนุมัติ' : 'ใช่, ปฏิเสธ',
+                cancelButtonText: 'ยกเลิก'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById(isApprove ? 'approveForm-' + reqId : 'rejectForm-' + reqId).submit();
+                }
+            });
         }
 
         function openDetailModal(reqId) {

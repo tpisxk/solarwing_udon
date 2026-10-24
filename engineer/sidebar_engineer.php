@@ -4,12 +4,26 @@ $current_page = basename($_SERVER['PHP_SELF'], ".php");
 
 $display_name = $_SESSION['name'] ?? '';
 $display_role = $_SESSION['role'] ?? $_SESSION['user_role'] ?? 'Engineer';
+$user_id = $_SESSION['user_id'] ?? null;
+
+// ดึงรูปโปรไฟล์ล่าสุดจากฐานข้อมูลโดยตรงเพื่อให้แสดงผลทันที
+$current_profile_img = '';
+if ($user_id && isset($pdo)) {
+    try {
+        $stmt_img = $pdo->prepare("SELECT profile_img FROM users WHERE id = ?");
+        $stmt_img->execute([$user_id]);
+        $current_profile_img = $stmt_img->fetchColumn();
+    } catch (PDOException $e) {
+        $current_profile_img = '';
+    }
+}
+
 // นับจำนวนผู้ใช้งานทั้งหมดในตาราง users
 try {
     $stmt_user_count = $pdo->query("SELECT COUNT(*) FROM users");
     $user_count = $stmt_user_count->fetchColumn();
 } catch (PDOException $e) {
-    $user_count = 0; // เผื่อกรณีเกิด Error ให้แสดงเป็น 0
+    $user_count = 0;
 }
 ?>
 <!-- 🌐 ส่วนเมนูด้านซ้าย (Sidebar) -->
@@ -53,11 +67,11 @@ try {
 
 <body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
 
-    <!-- Sidebar (กำหนด id สำหรับควบคุมเฉพาะส่วนนี้) -->
-    <aside id="appSidebar" class="w-64 bg-darkSidebar text-slate-300 flex flex-col h-full shrink-0 border-r border-slate-800 transition-colors duration-200">
+    <!-- Sidebar (กำหนด w-64 shrink-0 และ h-screen sticky top-0 เพื่อป้องกันการยุบตัวและยืดเต็มจอ) -->
+    <aside id="appSidebar" class="w-64 bg-darkSidebar text-slate-300 flex flex-col h-screen sticky top-0 shrink-0 border-r border-slate-800 transition-colors duration-200">
 
         <!-- Header โลโก้ -->
-        <div id="sidebarHeader" class="h-20 flex items-center px-6 border-b border-slate-800/80 gap-3 transition-colors duration-200">
+        <div id="sidebarHeader" class="h-20 flex items-center px-6 border-b border-slate-800/80 gap-3 transition-colors duration-200 shrink-0">
             <img src="../Pic/SW.png" alt="SW.png" class="w-8 h-8 object-contain">
             <h1 id="sidebarTitle" class="text-white font-bold text-lg tracking-tight">SolarWing <span class="text-emerald-500">Engineer</span></h1>
         </div>
@@ -87,25 +101,27 @@ try {
             <div class="pt-3 pb-2">
                 <hr id="sidebarDivider" class="border-slate-800/80 transition-colors duration-200">
             </div>
-
-
-
         </div>
 
-        <!-- 👤 ส่วนข้อมูลผู้ใช้, ปุ่มเปลี่ยนธีม Sidebar และปุ่มออกจากระบบ -->
-        <div id="sidebarFooter" class="p-4 border-t border-slate-800/80 bg-black/40 space-y-3 transition-colors duration-200">
+        <!-- 👤 ส่วนข้อมูลผู้ใช้, ปุ่มแก้ไขโปรไฟล์, ปุ่มเปลี่ยนธีม Sidebar และปุ่มออกจากระบบ -->
+        <div id="sidebarFooter" class="p-4 border-t border-slate-800/80 bg-black/40 space-y-3 transition-colors duration-200 shrink-0">
             <div class="flex items-center justify-between gap-3">
-                <div class="flex items-center gap-3 overflow-hidden">
-                    <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
-                        <i class="fas fa-user-shield text-sm"></i>
-                    </div>
+                <!-- คลิกที่โปรไฟล์เพื่อไปหน้าแก้ไขข้อมูลส่วนตัว -->
+                <a href="profile_engineer.php" class="flex items-center gap-3 overflow-hidden group flex-1">
+                    <?php if (!empty($current_profile_img) && file_exists('../' . $current_profile_img)): ?>
+                        <img src="../<?= htmlspecialchars($current_profile_img) ?>" class="w-10 h-10 rounded-xl object-cover border border-emerald-500/40 shrink-0">
+                    <?php else: ?>
+                        <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-white transition">
+                            <i class="fas fa-user-pen text-sm"></i>
+                        </div>
+                    <?php endif; ?>
                     <div class="overflow-hidden">
-                        <h4 id="userNameText" class="text-xs font-bold text-white truncate"><?php echo htmlspecialchars($display_name); ?></h4>
+                        <h4 id="userNameText" class="text-xs font-bold text-white truncate group-hover:text-emerald-400 transition"><?php echo htmlspecialchars($display_name); ?></h4>
                         <span class="inline-block mt-0.5 text-[10px] bg-emerald-900 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-800/40 font-medium">
-                            <?php echo htmlspecialchars($display_role); ?>
+                            <?php echo htmlspecialchars($display_role); ?> 
                         </span>
                     </div>
-                </div>
+                </a>
 
                 <!-- 🌓 ปุ่มสลับโหมด Sidebar -->
                 <button onclick="toggleSidebarTheme()" id="themeToggleBtn" title="สลับโหมดแถบเมนู"
@@ -167,12 +183,12 @@ try {
 
         function applyLightSidebar() {
             // เปลี่ยนเป็นธีม Sidebar สว่าง
-            sidebar.className = "w-64 bg-white text-slate-700 flex flex-col h-full shrink-0 border-r border-slate-200 transition-colors duration-200";
-            sidebarHeader.className = "h-20 flex items-center px-6 border-b border-slate-200 gap-3 transition-colors duration-200";
+            sidebar.className = "w-64 bg-white text-slate-700 flex flex-col h-screen sticky top-0 shrink-0 border-r border-slate-200 transition-colors duration-200";
+            sidebarHeader.className = "h-20 flex items-center px-6 border-b border-slate-200 gap-3 transition-colors duration-200 shrink-0";
             sidebarTitle.className = "text-slate-900 font-bold text-lg tracking-tight";
             sidebarDivider.className = "border-slate-200 transition-colors duration-200";
-            sidebarFooter.className = "p-4 border-t border-slate-200 bg-slate-50 space-y-3 transition-colors duration-200";
-            userNameText.className = "text-xs font-bold text-slate-900 truncate";
+            sidebarFooter.className = "p-4 border-t border-slate-200 bg-slate-50 space-y-3 transition-colors duration-200 shrink-0";
+            userNameText.className = "text-xs font-bold text-slate-900 truncate group-hover:text-emerald-600 transition";
 
             themeToggleBtn.className = "w-9 h-9 rounded-xl bg-slate-200 hover:bg-slate-300 text-amber-500 flex items-center justify-center transition border border-slate-300 shrink-0";
             themeIcon.className = "fas fa-moon text-xs text-slate-700";
@@ -190,12 +206,12 @@ try {
 
         function applyDarkSidebar() {
             // คืนค่าเป็นธีม Sidebar มืด (ค่าเริ่มต้น)
-            sidebar.className = "w-64 bg-darkSidebar text-slate-300 flex flex-col h-full shrink-0 border-r border-slate-800 transition-colors duration-200";
-            sidebarHeader.className = "h-20 flex items-center px-6 border-b border-slate-800/80 gap-3 transition-colors duration-200";
+            sidebar.className = "w-64 bg-darkSidebar text-slate-300 flex flex-col h-screen sticky top-0 shrink-0 border-r border-slate-800 transition-colors duration-200";
+            sidebarHeader.className = "h-20 flex items-center px-6 border-b border-slate-800/80 gap-3 transition-colors duration-200 shrink-0";
             sidebarTitle.className = "text-white font-bold text-lg tracking-tight";
             sidebarDivider.className = "border-slate-800/80 transition-colors duration-200";
-            sidebarFooter.className = "p-4 border-t border-slate-800/80 bg-black/40 space-y-3 transition-colors duration-200";
-            userNameText.className = "text-xs font-bold text-white truncate";
+            sidebarFooter.className = "p-4 border-t border-slate-800/80 bg-black/40 space-y-3 transition-colors duration-200 shrink-0";
+            userNameText.className = "text-xs font-bold text-white truncate group-hover:text-emerald-400 transition";
 
             themeToggleBtn.className = "w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 flex items-center justify-center transition border border-slate-700/60 shrink-0";
             themeIcon.className = "fas fa-sun text-xs";

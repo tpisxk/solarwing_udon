@@ -14,7 +14,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
 
     try {
         if ($action === 'complete') {
-            // ดึงข้อมูลการสั่งซื้อและเชื่อมโยงหา installation_id จากตาราง requisitions
             $stmt_po = $pdo->prepare("
                 SELECT po.product_id, po.required_qty, r.installation_id 
                 FROM purchase_orders po
@@ -31,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
                 $stmt_add_stock = $pdo->prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?");
                 $stmt_add_stock->execute([$po_item['required_qty'], $po_item['product_id']]);
 
-                // 2. บันทึกประวัติการรับเข้าลงตาราง stock_transactions (เพื่อให้สอดคล้องกับ ER Diagram และระบบสต็อกเดิม)
+                // 2. บันทึกประวัติการรับเข้าลงตาราง stock_transactions
                 $stmt_trans = $pdo->prepare("
                     INSERT INTO stock_transactions (product_id, installation_id, type, quantity, unit_cost, reference_no, user_id, note, created_at) 
                     VALUES (?, ?, 'in', ?, 0.00, ?, ?, ?, NOW())
@@ -59,18 +58,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
     }
 }
 
-// ดึงข้อมูลจาก purchase_orders เชื่อมกับ products และ requisitions[cite: 2]
+// ตั้งค่าระบบ Pagination และ Search
+$limit = isset($_GET['limit']) ? intval($_GET['limit']) : 5;
+if ($limit <= 0) $limit = 5;
+
+$page = isset($_GET['page']) ? intval($_GET['page']) : 1;
+if ($page <= 0) $page = 1;
+$offset = ($page - 1) * $limit;
+
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+$search_param = "%{$search}%";
+
 try {
+    // นับจำนวนทั้งหมดตามเงื่อนไขค้นหา
+    $count_sql = "SELECT COUNT(*) FROM purchase_orders po
+                  JOIN products p ON po.product_id = p.id
+                  JOIN requisitions r ON po.requisition_id = r.id
+                  WHERE p.name LIKE ? OR p.sku LIKE ? OR r.project_name LIKE ? OR r.engineer_name LIKE ?";
+    $stmt_count = $pdo->prepare($count_sql);
+    $stmt_count->execute([$search_param, $search_param, $search_param, $search_param]);
+    $total_records = $stmt_count->fetchColumn();
+    $total_pages = ceil($total_records / $limit);
+    if ($total_pages == 0) $total_pages = 1;
+    if ($page > $total_pages) $page = $total_pages;
+
+    // ดึงข้อมูลแบบจำกัดจำนวน (Limit & Offset)
     $sql = "SELECT po.id AS po_id, po.required_qty, po.status, po.created_at,
                    p.name AS product_name, p.sku, GREATEST(p.stock_quantity, 0) AS current_stock,
                    r.project_name, r.engineer_name
             FROM purchase_orders po
             JOIN products p ON po.product_id = p.id
             JOIN requisitions r ON po.requisition_id = r.id
-            ORDER BY po.id DESC";
-    $purchase_orders = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+            WHERE p.name LIKE ? OR p.sku LIKE ? OR r.project_name LIKE ? OR r.engineer_name LIKE ?
+            ORDER BY po.id DESC
+            LIMIT ? OFFSET ?";
+    
+    $stmt = $pdo->prepare($sql);
+    $stmt->bindValue(1, $search_param, PDO::PARAM_STR);
+    $stmt->bindValue(2, $search_param, PDO::PARAM_STR);
+    $stmt->bindValue(3, $search_param, PDO::PARAM_STR);
+    $stmt->bindValue(4, $search_param, PDO::PARAM_STR);
+    $stmt->bindValue(5, $limit, PDO::PARAM_INT);
+    $stmt->bindValue(6, $offset, PDO::PARAM_INT);
+    $stmt->execute();
+    
+    $purchase_orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $purchase_orders = [];
+    $total_records = 0;
+    $total_pages = 1;
 }
 ?>
 
@@ -84,6 +120,8 @@ try {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SweetAlert2 CSS & JS -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -110,12 +148,33 @@ try {
         <div class="flex-1 overflow-y-auto p-4 lg:p-8">
             <div class="max-w-6xl mx-auto space-y-6">
 
-                <?php if ($success_msg): ?>
-                    <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-xs font-bold"><?= $success_msg ?></div>
-                <?php endif; ?>
-                <?php if ($error_msg): ?>
-                    <div class="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-2xl text-xs font-bold"><?= $error_msg ?></div>
-                <?php endif; ?>
+                <!-- แถบค้นหา และตัวเลือกจำนวนแถวต่อหน้า -->
+                <div class="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+                    <form method="GET" action="" class="flex items-center gap-2 w-full md:w-auto">
+                        <input type="hidden" name="limit" value="<?= $limit ?>">
+                        <div class="relative w-full md:w-80">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                            </span>
+                            <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="ค้นหาชื่อสินค้า, SKU, โครงการ..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-500 transition">
+                        </div>
+                        <button type="submit" class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm shrink-0">ค้นหา</button>
+                        <?php if (!empty($search)): ?>
+                            <a href="admin_procurement.php?limit=<?= $limit ?>" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold transition shrink-0">ล้าง</a>
+                        <?php endif; ?>
+                    </form>
+
+                    <div class="flex items-center gap-2 text-xs text-slate-600 shrink-0">
+                        <span>แสดง:</span>
+                        <select onchange="window.location.href='admin_procurement.php?limit='+this.value+'&search=<?= urlencode($search) ?>'" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-emerald-500">
+                            <option value="5" <?= $limit == 5 ? 'selected' : '' ?>>5 แถว</option>
+                            <option value="10" <?= $limit == 10 ? 'selected' : '' ?>>10 แถว</option>
+                            <option value="25" <?= $limit == 25 ? 'selected' : '' ?>>25 แถว</option>
+                            <option value="50" <?= $limit == 50 ? 'selected' : '' ?>>50 แถว</option>
+                        </select>
+                        <span>จากทั้งหมด <?= number_format($total_records) ?> รายการ</span>
+                    </div>
+                </div>
 
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="overflow-x-auto">
@@ -157,10 +216,10 @@ try {
                                             </td>
                                             <td class="py-3.5 px-4 text-center">
                                                 <?php if ($po['status'] === 'Pending'): ?>
-                                                    <form action="" method="POST" class="inline">
+                                                    <form id="form-po-<?= $po['po_id'] ?>" action="admin_procurement.php?limit=<?= $limit ?>&search=<?= urlencode($search) ?>&page=<?= $page ?>" method="POST" class="inline">
                                                         <input type="hidden" name="po_id" value="<?= $po['po_id'] ?>">
                                                         <input type="hidden" name="action_type" value="complete">
-                                                        <button type="submit" onclick="return confirm('ยืนยันว่าสินค้ามาส่งแล้ว และต้องการเติมสต็อกเข้าคลัง?')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-xl font-bold transition-all shadow-sm">
+                                                        <button type="button" onclick="confirmRestock(<?= $po['po_id'] ?>)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-xl font-bold transition-all shadow-sm">
                                                             <i class="fa-solid fa-box-archive me-1"></i> เติมเข้าสต็อก
                                                         </button>
                                                     </form>
@@ -178,10 +237,97 @@ try {
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- ส่วนแสดงปุ่มเปลี่ยนหน้า (Pagination) -->
+                    <?php if ($total_pages > 1): ?>
+                        <div class="flex flex-col sm:flex-row justify-between items-center p-4 border-t border-slate-200 bg-slate-50 gap-3 text-xs">
+                            <div class="text-slate-500 font-medium">
+                                หน้าที่ <span class="font-bold text-slate-800"><?= $page ?></span> จากทั้งหมด <span class="font-bold text-slate-800"><?= $total_pages ?></span> หน้า
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <?php if ($page > 1): ?>
+                                    <a href="admin_procurement.php?limit=<?= $limit ?>&search=<?= urlencode($search) ?>&page=1" class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 transition">หน้าแรก</a>
+                                    <a href="admin_procurement.php?limit=<?= $limit ?>&search=<?= urlencode($search) ?>&page=<?= $page - 1 ?>" class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 transition"><i class="fa-solid fa-chevron-left"></i></a>
+                                <?php endif; ?>
+
+                                <?php
+                                $start_p = max(1, $page - 2);
+                                $end_p = min($total_pages, $page + 2);
+                                for ($i = $start_p; $i <= $end_p; $i++):
+                                ?>
+                                    <a href="admin_procurement.php?limit=<?= $limit ?>&search=<?= urlencode($search) ?>&page=<?= $i ?>" class="px-3 py-1.5 rounded-xl font-bold transition <?= $i === $page ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100' ?>">
+                                        <?= $i ?>
+                                    </a>
+                                <?php endfor; ?>
+
+                                <?php if ($page < $total_pages): ?>
+                                    <a href="admin_procurement.php?limit=<?= $limit ?>&search=<?= urlencode($search) ?>&page=<?= $page + 1 ?>" class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 transition"><i class="fa-solid fa-chevron-right"></i></a>
+                                    <a href="admin_procurement.php?limit=<?= $limit ?>&search=<?= urlencode($search) ?>&page=<?= $total_pages ?>" class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 transition">หน้าสุดท้าย</a>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
                 </div>
 
             </div>
         </div>
     </main>
+
+    <!-- Script สำหรับ SweetAlert2 -->
+    <script>
+        function confirmRestock(poId) {
+            Swal.fire({
+                title: '<span class="text-slate-800 text-lg font-bold">ยืนยันการเติมสต็อก?</span>',
+                html: '<span class="text-slate-500 text-xs">ระบบจะทำการอัปเดตสถานะและเพิ่มจำนวนสินค้าเข้าคลังอัตโนมัติ</span>',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#059669',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'ยืนยัน, เติมเข้าสต็อก',
+                cancelButtonText: 'ยกเลิก',
+                reverseButtons: true,
+                customClass: {
+                    popup: 'rounded-3xl font-sans p-6 shadow-xl',
+                    confirmButton: 'rounded-2xl py-2.5 font-bold text-xs shadow-md shadow-emerald-600/20 w-36',
+                    cancelButton: 'rounded-2xl py-2.5 font-bold text-xs shadow-sm w-36',
+                    icon: 'border-2 border-slate-300 text-slate-400'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('form-po-' + poId).submit();
+                }
+            });
+        }
+
+        // แสดงแจ้งเตือน SweetAlert2 เมื่อดำเนินการสำเร็จหรือเกิดข้อผิดพลาด
+        <?php if (!empty($success_msg)): ?>
+            Swal.fire({
+                icon: 'success',
+                title: '<span class="text-slate-800 text-base font-bold">สำเร็จ!</span>',
+                html: '<span class="text-slate-500 text-xs"><?= $success_msg ?></span>',
+                confirmButtonColor: '#059669',
+                confirmButtonText: 'ตกลง',
+                customClass: {
+                    popup: 'rounded-3xl font-sans p-6',
+                    confirmButton: 'rounded-2xl px-6 py-2.5 font-bold text-xs shadow-md shadow-emerald-600/20 w-36'
+                }
+            });
+        <?php endif; ?>
+
+        <?php if (!empty($error_msg)): ?>
+            Swal.fire({
+                icon: 'error',
+                title: '<span class="text-slate-800 text-base font-bold">เกิดข้อผิดพลาด</span>',
+                html: '<span class="text-slate-500 text-xs"><?= $error_msg ?></span>',
+                confirmButtonColor: '#059669',
+                confirmButtonText: 'ตกลง',
+                customClass: {
+                    popup: 'rounded-3xl font-sans p-6',
+                    confirmButton: 'rounded-2xl px-6 py-2.5 font-bold text-xs shadow-md w-36'
+                }
+            });
+        <?php endif; ?>
+    </script>
 </body>
 </html>

@@ -4,6 +4,19 @@ $current_page = basename($_SERVER['PHP_SELF'], ".php");
 
 $display_name = $_SESSION['name'] ?? '';
 $display_role = $_SESSION['role'] ?? $_SESSION['user_role'] ?? 'Admin';
+$user_id = $_SESSION['user_id'] ?? null;
+
+// ดึงรูปโปรไฟล์ล่าสุดจากฐานข้อมูลโดยตรงเพื่อให้แสดงผลทันที
+$current_profile_img = '';
+if ($user_id && isset($pdo)) {
+    try {
+        $stmt_img = $pdo->prepare("SELECT profile_img FROM users WHERE id = ?");
+        $stmt_img->execute([$user_id]);
+        $current_profile_img = $stmt_img->fetchColumn();
+    } catch (PDOException $e) {
+        $current_profile_img = '';
+    }
+}
 
 // แปลงค่าสิทธิ์เป็นตัวพิมพ์เล็กเพื่อตรวจสอบ
 $role_lower = strtolower(trim($display_role));
@@ -20,10 +33,18 @@ try {
 
 // นับจำนวนใบเบิกที่รอตรวจสอบ (Pending) เพื่อนำมาแสดงแจ้งเตือนที่ Sidebar
 try {
-    $stmt_req_count = $pdo->query("SELECT COUNT(*) FROM requisitions WHERE status = 'Pending'");
-    $pending_requisitions_count = $stmt_req_count->fetchColumn();
+    $stmt_req = $pdo->query("SELECT COUNT(*) FROM requisitions WHERE status = 'Pending'");
+    $pending_requisitions_count = $stmt_req->fetchColumn();
 } catch (PDOException $e) {
     $pending_requisitions_count = 0;
+}
+
+// นับจำนวนรายการจัดซื้อที่รอดำเนินการ (Pending) จากตาราง purchase_orders เพื่อนำมาแสดงแจ้งเตือนที่ Sidebar
+try {
+    $stmt_proc = $pdo->query("SELECT COUNT(*) FROM purchase_orders WHERE status = 'Pending'");
+    $pending_procurement_count = $stmt_proc->fetchColumn();
+} catch (PDOException $e) {
+    $pending_procurement_count = 0;
 }
 
 // ตรวจสอบสถานะหน้าปัจจุบัน เพื่อเปิด Dropdown หมวดหมู่นั้นๆ ค้างไว้โดยอัตโนมัติ (ไม่ให้กะพริบ)
@@ -125,11 +146,18 @@ $is_cat_users     = in_array($current_page, ['manage_users', 'add_user']);
                                     <?= number_format($pending_requisitions_count) ?>
                                 </span>
                             <?php else: ?>
-                                <span class="badge-count bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full">0</span>
+                                <span class="badge-count bg-rose-500/20 text-rose-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-500/30">0</span>
                             <?php endif; ?>
                         </a>
-                        <a href="admin_procurement.php" class="menu-item w-full flex items-center gap-3.5 px-4 py-2.5 rounded-xl transition-all <?= ($current_page == 'admin_procurement') ? 'bg-brandGreen text-white shadow-md' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
-                            <i class="fas fa-cart-shopping w-5 text-center text-sm"></i> จัดซื้อสินค้า
+                        <a href="admin_procurement.php" class="menu-item w-full flex items-center justify-between px-4 py-2.5 rounded-xl transition-all <?= ($current_page == 'admin_procurement') ? 'bg-brandGreen text-white shadow-md' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' ?>">
+                            <div class="flex items-center gap-3.5"><i class="fas fa-cart-shopping w-5 text-center text-sm"></i> จัดซื้อสินค้า</div>
+                            <?php if ($pending_procurement_count > 0): ?>
+                                <span class="badge-count bg-rose-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full animate-pulse shadow-sm">
+                                    <?= number_format($pending_procurement_count) ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="badge-count bg-rose-500/20 text-rose-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-500/30">0</span>
+                            <?php endif; ?>
                         </a>
                     </div>
                 </div>
@@ -210,20 +238,25 @@ $is_cat_users     = in_array($current_page, ['manage_users', 'add_user']);
             </div>
         </div>
 
-        <!-- 👤 ส่วนข้อมูลผู้ใช้, ปุ่มเปลี่ยนธีม Sidebar และปุ่มออกจากระบบ -->
+        <!-- 👤 ส่วนข้อมูลผู้ใช้, ปุ่มแก้ไขโปรไฟล์, ปุ่มเปลี่ยนธีม Sidebar และปุ่มออกจากระบบ -->
         <div id="sidebarFooter" class="p-4 border-t border-slate-800/80 bg-black/40 space-y-3 transition-colors duration-200 shrink-0">
             <div class="flex items-center justify-between gap-3">
-                <div class="flex items-center gap-3 overflow-hidden">
-                    <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
-                        <i class="fas fa-user-shield text-sm"></i>
-                    </div>
+                <!-- คลิกที่โปรไฟล์เพื่อไปหน้าแก้ไขข้อมูลส่วนตัว -->
+                <a href="profile_admin.php" class="flex items-center gap-3 overflow-hidden group flex-1">
+                    <?php if (!empty($current_profile_img) && file_exists('../' . $current_profile_img)): ?>
+                        <img src="../<?= htmlspecialchars($current_profile_img) ?>" class="w-10 h-10 rounded-xl object-cover border border-emerald-500/40 shrink-0">
+                    <?php else: ?>
+                        <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-white transition">
+                            <i class="fas fa-user-pen text-sm"></i>
+                        </div>
+                    <?php endif; ?>
                     <div class="overflow-hidden">
-                        <h4 id="userNameText" class="text-xs font-bold text-white truncate"><?php echo htmlspecialchars($display_name); ?></h4>
+                        <h4 id="userNameText" class="text-xs font-bold text-white truncate group-hover:text-emerald-400 transition"><?php echo htmlspecialchars($display_name); ?></h4>
                         <span class="inline-block mt-0.5 text-[10px] bg-emerald-900 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-800/40 font-medium">
-                            <?php echo htmlspecialchars($display_role); ?>
+                            <?php echo htmlspecialchars($display_role); ?> 
                         </span>
                     </div>
-                </div>
+                </a>
 
                 <!-- 🌓 ปุ่มสลับโหมด Sidebar -->
                 <button onclick="toggleSidebarTheme()" id="themeToggleBtn" title="สลับโหมดแถบเมนู"
@@ -268,7 +301,39 @@ $is_cat_users     = in_array($current_page, ['manage_users', 'add_user']);
             }
         }
 
-        // คืนค่าสถานะ Dropdown ที่เปิดไว้ล่าสุดตอนโหลดหน้า
+        // ฟังก์ชันสำหรับดึงข้อมูล Badge แจ้งเตือน
+        function updatePendingCounts() {
+            fetch('get_pending_counts.php')
+                .then(response => response.json())
+                .then(data => {
+                    // อัปเดตจัดซื้อ
+                    const procBadges = document.querySelectorAll('a[href="admin_procurement.php"] .badge-count');
+                    procBadges.forEach(badge => {
+                        if (data.procurement > 0) {
+                            badge.className = "badge-count bg-rose-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full animate-pulse shadow-sm";
+                            badge.textContent = Number(data.procurement).toLocaleString();
+                        } else {
+                            badge.className = "badge-count bg-rose-500/20 text-rose-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-500/30";
+                            badge.textContent = "0";
+                        }
+                    });
+
+                    // อัปเดตใบเบิก
+                    const reqBadges = document.querySelectorAll('a[href="admin_requisitions.php"] .badge-count');
+                    reqBadges.forEach(badge => {
+                        if (data.requisitions > 0) {
+                            badge.className = "badge-count bg-rose-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full animate-pulse shadow-sm";
+                            badge.textContent = Number(data.requisitions).toLocaleString();
+                        } else {
+                            badge.className = "badge-count bg-rose-500/20 text-rose-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-500/30";
+                            badge.textContent = "0";
+                        }
+                    });
+                })
+                .catch(error => console.error('Error updating badge counts:', error));
+        }
+
+        // คืนค่าสถานะ Dropdown ที่เปิดไว้ล่าสุด และดึงข้อมูลแจ้งเตือนทันทีตอนโหลดหน้าเว็บ
         document.addEventListener('DOMContentLoaded', () => {
             const categories = ['catInventory', 'catLocation', 'catFinance', 'catUsers'];
             
@@ -285,9 +350,15 @@ $is_cat_users     = in_array($current_page, ['manage_users', 'add_user']);
                     icon.style.transform = "rotate(0deg)";
                 }
             });
+
+            // เรียกทำงานทันทีเมื่อโหลดหน้าเว็บ
+            updatePendingCounts();
         });
 
-        // ตรวจสอบค่าที่บันทึกไว้ในเบราว์เซอร์
+        // ตั้งเวลาดึงข้อมูลอัปเดต Badge แจ้งเตือนอัตโนมัติทุกๆ 30 วินาที
+        setInterval(updatePendingCounts, 30000);
+
+        // ตรวจสอบค่าที่บันทึกไว้ในเบราว์เซอร์เรื่องธีม Sidebar
         if (localStorage.getItem('sidebar_theme') === 'light') {
             applyLightSidebar();
         } else {
@@ -310,7 +381,7 @@ $is_cat_users     = in_array($current_page, ['manage_users', 'add_user']);
             sidebarTitle.className = "text-slate-900 font-bold text-lg tracking-tight";
             sidebarDivider.className = "border-slate-200 transition-colors duration-200";
             sidebarFooter.className = "p-4 border-t border-slate-200 bg-slate-50 space-y-3 transition-colors duration-200 shrink-0";
-            userNameText.className = "text-xs font-bold text-slate-900 truncate";
+            userNameText.className = "text-xs font-bold text-slate-900 truncate group-hover:text-emerald-600 transition";
 
             themeToggleBtn.className = "w-9 h-9 rounded-xl bg-slate-200 hover:bg-slate-300 text-amber-500 flex items-center justify-center transition border border-slate-300 shrink-0";
             themeIcon.className = "fas fa-moon text-xs text-slate-700";
@@ -328,7 +399,7 @@ $is_cat_users     = in_array($current_page, ['manage_users', 'add_user']);
             sidebarTitle.className = "text-white font-bold text-lg tracking-tight";
             sidebarDivider.className = "border-slate-800/80 transition-colors duration-200";
             sidebarFooter.className = "p-4 border-t border-slate-800/80 bg-black/40 space-y-3 transition-colors duration-200 shrink-0";
-            userNameText.className = "text-xs font-bold text-white truncate";
+            userNameText.className = "text-xs font-bold text-white truncate group-hover:text-emerald-400 transition";
 
             themeToggleBtn.className = "w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 flex items-center justify-center transition border border-slate-700/60 shrink-0";
             themeIcon.className = "fas fa-sun text-xs";

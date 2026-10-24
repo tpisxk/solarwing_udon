@@ -12,8 +12,8 @@ $success_msg = $error_msg = '';
 
 $projects = $pdo->query("SELECT id, name FROM installations ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 
-// ใช้ GREATEST(stock_quantity, 0) เพื่อบังคับให้ถ้าสต็อกติดลบ ให้แสดงผลเป็น 0 ทันที
-$products = $pdo->query("SELECT id, name, sku, GREATEST(stock_quantity, 0) AS stock_quantity FROM products ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+// ดึงข้อมูลสินค้าพร้อมหมวดหมู่ (category)
+$products = $pdo->query("SELECT id, name, sku, category, GREATEST(stock_quantity, 0) AS stock_quantity FROM products ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 $templates = $pdo->query("SELECT * FROM requisition_templates ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             $stmt_i = $pdo->prepare("INSERT INTO requisition_template_items (template_id, product_id, quantity, remark) VALUES (?, ?, ?, ?)");
             foreach ($items as $it) {
-                $qty = intval($it['qty'] ?? 0);
+                $qty = floatval($it['qty'] ?? 0);
                 if ($it['product_id'] > 0 && $qty > 0) {
                     $stmt_i->execute([$t_id, $it['product_id'], $qty, $it['remark'] ?? '']);
                 }
@@ -54,88 +54,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $out_of_stock_list = [];
 
-            foreach ($items as $it) {
+            foreach ($items as$it) {
                 $p_id = intval($it['product_id'] ?? 0);
-                $qty = intval($it['qty'] ?? 0);
+                $qty = floatval($it['qty'] ?? 0);
 
-                if ($p_id > 0 && $qty > 0) {
-                    // 1. บันทึกรายการเบิกปกติลง requisition_items
-                    $stmt_i->execute([$req_id, $p_id, $qty, $it['remark'] ?? '']);
+                if ($p_id > 0 && $qty > 0) {$stmt_i->execute([$req_id,$p_id, $qty,$it['remark'] ?? '']);
 
-                    // 2. เช็กสต็อกปัจจุบันในตาราง products
-                    $stmt_chk =$pdo->prepare("SELECT name, GREATEST(stock_quantity, 0) AS stock_quantity FROM products WHERE id = ?");
+                    $stmt_chk =$pdo->prepare("SELECT name, category, GREATEST(stock_quantity, 0) AS stock_quantity FROM products WHERE id = ?");
                     $stmt_chk->execute([$p_id]);
                     $prod =$stmt_chk->fetch(PDO::FETCH_ASSOC);
 
-                    // 3. ถ้าสต็อกไม่พอหรือเป็น 0 ให้ส่งเข้าตาราง purchase_orders
                     if ($prod) {
-                        $current_stock = intval($prod['stock_quantity']);
+                        $current_stock = floatval($prod['stock_quantity']);
+                        $cat = trim($prod['category'] ?? 'ชิ้น');
+                        $unit_label = $cat !== '' ?$cat : 'ชิ้น';
+
                         if ($current_stock < $qty) {$needed_qty = $qty -$current_stock;
-                            $stmt_po->execute([$req_id,$p_id, $needed_qty]);$out_of_stock_list[] = $prod['name'] . " (ขาด {$needed_qty} ชิ้น)";
+                            $stmt_po->execute([$req_id, $p_id,$needed_qty]);
+                            $out_of_stock_list[] =$prod['name'] . " (ขาด " . (fmod($needed_qty, 1) !== 0.0 ?$needed_qty : intval($needed_qty)) . " {$unit_label})";
                         }
                     }
                 }
             }
             $pdo->commit();
 
-            // ==========================================
-            // ส่ง LINE แจ้งเตือนเมื่อส่งใบเบิกใหม่
-            // ==========================================
+            // ส่ง LINE แจ้งเตือน (เปลี่ยนมาใช้ stream context แทน cURL เพื่อรองรับทุกเครื่องและขึ้น Host จริงได้)
             $access_token = "pKse9FestSF5QdY9Hgnb7GtbcJqtXwucA50VBjLmWySwUbwM5JamQDMvlJflPQqTbibghoPRCGrGRnvehBxSooN0xjX6/3I4CF0nSeqbRgtKIBkE1mkxzPgmDKh+Io70jW7o548tAqX67bsJ3JQTBwdB04t89/1O/w1cDnyilFU=";
-            
             $admin_line_ids = [
-                "U61cff0977ce8c9de7bc8a5f949e44a43", // User ID ของทิว
+                "U61cff0977ce8c9de7bc8a5f949e44a43", // ทิว
                 "U0b88acf06842b3899ee341a0fce58ba1", // พี่มะปราง
             ];
 
             $line_message = "🔔 มีใบเบิกอุปกรณ์ใหม่จากวิศวกร!\n" .
-                        
                             "📌 โครงการ: " . ($_POST['project_name'] ?? '-') . "\n" .
                             "👷 ผู้ขอ: " . ($_SESSION['username'] ?? 'วิศวกร') . "\n" .
                             "⏳ สถานะ: รอแอดมินตรวจสอบ";
 
             if (!empty($out_of_stock_list)) {
-                $line_message .= "\n\n⚠️ **มีสินค้าหมด/ขาดสต็อก :**\n- " . implode("\n- ", $out_of_stock_list);
+                $line_message .= "\n\n⚠️ มีสินค้าหมด/ขาดสต็อก :\n- " . implode("\n- ", $out_of_stock_list);
             }
 
             foreach ($admin_line_ids as$to_id) {
                 if (empty($to_id)) continue;
-
                 $line_data = [
                     'to' => $to_id,
-                    'messages' => [
-                        [
-                            'type' => 'text',
-                            'text' => $line_message
-                        ]
+                    'messages' => [['type' => 'text', 'text' => $line_message]]
+                ];
+                
+                $options = [
+                    'http' => [
+                        'header'  => "Content-Type: application/json\r\n" .
+                                     "Authorization: Bearer " . $access_token . "\r\n",
+                        'method'  => 'POST',
+                        'content' => json_encode($line_data),
+                        'ignore_errors' => true
                     ]
                 ];
-
-                $ch = curl_init('https://api.line.me/v2/bot/message/push');
-                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($line_data));
-                curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                    'Content-Type: application/json',
-                    'Authorization: Bearer ' . $access_token
-                ]);
-                curl_exec($ch);
-                curl_close($ch);
+                $context  = stream_context_create($options);
+                @file_get_contents('https://api.line.me/v2/bot/message/push', false, $context);
             }
-            // ==========================================
 
             $success_msg = "ส่งใบเบิกเรียบร้อยแล้ว!" . (!empty($out_of_stock_list) ? " (ส่งรายการสินค้าที่ขาดไปยังหน้าจัดซื้อเรียบร้อย)" : "");
         } elseif (isset($_POST['export_excel'])) {
             header("Content-Type: application/vnd.ms-excel; charset=utf-8");
             header("Content-Disposition: attachment; filename=Requisition_" . date('Ymd_His') . ".xls");
             echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head><body>';
-            echo '<h2>ใบเบิกของ - SOLAR WING</h2><p><b>โครงการ:</b> ' . htmlspecialchars($_POST['project_name']) . '</p><table border="1"><tr style="background:#059669;color:#fff;"><th>#</th><th>สินค้า</th><th>จำนวน</th><th>หมายเหตุ</th></tr>';
+            echo '<h2>ใบเบิกของ - SOLAR WING</h2><p><b>โครงการ:</b> ' . htmlspecialchars($_POST['project_name']) . '</p><table border="1"><tr style="background:#059669;color:#fff;"><th>#</th><th>สินค้า</th><th>จำนวน</th><th>หน่วย</th><th>หมายเหตุ</th></tr>';
             $no = 1;
             foreach ($_POST['item'] ?? [] as$it) {
-                $qty = intval($it['qty'] ?? 0);
-                if ($it['product_id'] > 0 && $qty > 0) {$p_name = '-';
-                    foreach ($products as$p) if ($p['id'] ==$it['product_id']) $p_name =$p['name'] . ($p['sku'] ? " ({$p['sku']})" : '');
-                    echo "<tr><td align='center'>" . $no++ . "</td><td>" . htmlspecialchars($p_name) . "</td><td align='center'>" . $qty . "</td><td>" . htmlspecialchars($it['remark']) . "</td></tr>";
+                $qty = floatval($it['qty'] ?? 0);
+                if ($it['product_id'] > 0 &&$qty > 0) {
+                    $p_name = '-';$p_unit = 'ชิ้น';
+                    foreach ($products as$p) {
+                        if ($p['id'] ==$it['product_id']) {
+                            $p_name =$p['name'] . ($p['sku'] ? " ({$p['sku']})" : '');
+                            $p_unit = !empty($p['category']) ?$p['category'] : 'ชิ้น';
+                        }
+                    }
+                    echo "<tr><td align='center'>" . $no++ . "</td><td>" . htmlspecialchars($p_name) . "</td><td align='center'>" . $qty . "</td><td align='center'>" . htmlspecialchars($p_unit) . "</td><td>" . htmlspecialchars($it['remark']) . "</td></tr>";
                 }
             }
             echo '</table></body></html>';
@@ -226,7 +222,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         <th class="py-3 px-4 text-center w-12">#</th>
                                         <th class="py-3 px-4">พิมพ์ค้นหา หรือเลือกสินค้าจากคลัง</th>
                                         <th class="py-3 px-4 text-center w-32">คงเหลือ</th>
-                                        <th class="py-3 px-4 text-center w-28">จำนวนเบิก</th>
+                                        <th class="py-3 px-4 text-center w-36">จำนวนเบิก / หน่วย</th>
                                         <th class="py-3 px-4">หมายเหตุ</th>
                                         <th class="py-3 px-3 text-center w-16">ลบ</th>
                                     </tr>
@@ -242,8 +238,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                 <input type="hidden" name="item[<?= $i ?>][product_id]" class="prod-id-input">
                                             </div>
                                         </td>
-                                        <td class="py-3 px-4 text-center"><input type="text" id="stock_text_<?= $i ?>" value="-" readonly class="w-full px-2 py-2 rounded-xl border border-slate-200 bg-slate-50 text-center font-bold text-emerald-600"><input type="hidden" id="stock_val_<?= $i ?>" value="0"></td>
-                                        <td class="py-3 px-4 text-center"><input type="number" name="item[<?= $i ?>][qty]" min="0" value="0" class="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-center font-bold"></td>
+                                        <td class="py-3 px-4 text-center">
+                                            <input type="text" id="stock_text_<?= $i ?>" value="-" readonly class="w-full px-2 py-2 rounded-xl border border-slate-200 bg-slate-50 text-center font-bold text-emerald-600">
+                                            <input type="hidden" id="stock_val_<?= $i ?>" value="0">
+                                        </td>
+                                        <td class="py-3 px-4 text-center">
+                                            <div class="flex items-center gap-1.5">
+                                                <input type="number" name="item[<?= $i ?>][qty]" min="0" step="any" value="0" class="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-center font-bold">
+                                                <span id="unit_label_<?= $i ?>" class="text-[11px] font-bold text-slate-500 whitespace-nowrap">ชิ้น</span>
+                                            </div>
+                                        </td>
                                         <td class="py-3 px-4"><input type="text" name="item[<?= $i ?>][remark]" placeholder="หมายเหตุ..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200"></td>
                                         <td class="py-3 px-3 text-center"><button type="button" onclick="this.closest('tr').remove(); recalculate();" class="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center mx-auto"><i class="fa-solid fa-trash text-xs"></i></button></td>
                                     </tr>
@@ -275,6 +279,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             document.getElementById('sidebarBackdrop').classList.toggle('hidden');
         };
 
+        function getUnit(category) {
+            if (!category || category.trim() === '') return 'ชิ้น';
+            return category.trim();
+        }
+
         function openDropdown(input) {
             document.querySelectorAll('.dropdown-list').forEach(l => l.classList.add('hidden'));
             renderList(input.closest('.custom-dropdown').querySelector('.dropdown-list'), productsData, input);
@@ -288,23 +297,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 input.closest('.custom-dropdown').querySelector('.prod-id-input').value = ''; 
                 document.getElementById('stock_text_' + idx).value = '-'; 
                 document.getElementById('stock_val_' + idx).value = '0'; 
+                document.getElementById('unit_label_' + idx).innerText = 'ชิ้น';
             }
         }
 
         function renderList(container, items, input, idx) {
             container.innerHTML = items.length ? '' : `<div class="p-3 text-center text-slate-400 text-xs">ไม่พบสินค้า</div>`;
             items.forEach(p => {
-                const stockQty = Math.max(parseInt(p.stock_quantity) || 0, 0);
+                const stockQty = parseFloat(p.stock_quantity) || 0;
+                const displayStock = Number.isInteger(stockQty) ? stockQty : stockQty.toFixed(2);
+                const unit = getUnit(p.category);
                 const div = document.createElement('div');
                 div.className = 'px-3.5 py-2 hover:bg-emerald-50 cursor-pointer flex justify-between text-xs items-center';
-                div.innerHTML = `<div><div class="font-bold text-slate-800">${p.name}</div><div class="text-[10px] text-slate-400">SKU: ${p.sku || '-'}</div></div><span class="px-2 py-0.5 rounded-full font-bold text-[10px] ${stockQty > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}">สต็อก: ${stockQty}</span>`;
+                div.innerHTML = `<div><div class="font-bold text-slate-800">${p.name}</div><div class="text-[10px] text-slate-400">SKU: ${p.sku || '-'} | หมวด: ${p.category || '-'}</div></div><span class="px-2 py-0.5 rounded-full font-bold text-[10px] ${stockQty > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}">สต็อก: ${displayStock} ${unit}</span>`;
                 div.onclick = () => {
                     input.value = `${p.name} ${p.sku ? '(' + p.sku + ')' : ''}`;
                     const row = input.closest('tr');
                     const rowIndex = Array.from(row.parentNode.children).indexOf(row);
                     row.querySelector('.prod-id-input').value = p.id;
-                    document.getElementById('stock_text_' + rowIndex).value = stockQty + ' ชิ้น';
+                    document.getElementById('stock_text_' + rowIndex).value = displayStock;
                     document.getElementById('stock_val_' + rowIndex).value = stockQty;
+                    document.getElementById('unit_label_' + rowIndex).innerText = unit;
                     
                     const stockInputText = document.getElementById('stock_text_' + rowIndex);
                     if (stockQty <= 0) {
@@ -326,7 +339,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const tbody = document.getElementById('tableBody');
             const idx = tbody.rows.length;
             const p = productsData.find(x => x.id == pId) || {};
-            const stockQty = Math.max(parseInt(p.stock_quantity) || 0, 0);
+            const stockQty = parseFloat(p.stock_quantity) || 0;
+            const displayStock = Number.isInteger(stockQty) ? stockQty : stockQty.toFixed(2);
+            const unit = getUnit(p.category);
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-50/50 row-item relative';
             tr.innerHTML = `
@@ -338,8 +353,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <input type="hidden" name="item[${idx}][product_id]" value="${pId}" class="prod-id-input">
                     </div>
                 </td>
-                <td class="py-3 px-4 text-center"><input type="text" id="stock_text_${idx}" value="${p.name ? stockQty + ' ชิ้น' : '-'}" readonly class="w-full px-2 py-2 rounded-xl border border-slate-200 bg-slate-50 text-center font-bold ${stockQty > 0 ? 'text-emerald-600' : 'text-rose-600 bg-rose-50'}"><input type="hidden" id="stock_val_${idx}" value="${stockQty}"></td>
-                <td class="py-3 px-4 text-center"><input type="number" name="item[${idx}][qty]" min="0" value="${qty}" placeholder="0" class="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-center font-bold"></td>
+                <td class="py-3 px-4 text-center">
+                    <input type="text" id="stock_text_${idx}" value="${p.name ? displayStock : '-'}" readonly class="w-full px-2 py-2 rounded-xl border border-slate-200 bg-slate-50 text-center font-bold ${stockQty > 0 ? 'text-emerald-600' : 'text-rose-600 bg-rose-50'}">
+                    <input type="hidden" id="stock_val_${idx}" value="${stockQty}">
+                </td>
+                <td class="py-3 px-4 text-center">
+                    <div class="flex items-center gap-1.5">
+                        <input type="number" name="item[${idx}][qty]" min="0" step="any" value="${qty}" placeholder="0" class="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-center font-bold">
+                        <span id="unit_label_${idx}" class="text-[11px] font-bold text-slate-500 whitespace-nowrap">${unit}</span>
+                    </div>
+                </td>
                 <td class="py-3 px-4"><input type="text" name="item[${idx}][remark]" value="${remark}" placeholder="หมายเหตุ..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200"></td>
                 <td class="py-3 px-3 text-center"><button type="button" onclick="this.closest('tr').remove(); recalculate();" class="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center mx-auto"><i class="fa-solid fa-trash text-xs"></i></button></td>
             `;
@@ -353,6 +376,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 row.querySelector('.prod-id-input').name = `item[${i}][product_id]`;
                 row.querySelector('input[id^="stock_text_"]').id = `stock_text_${i}`;
                 row.querySelector('input[id^="stock_val_"]').id = `stock_val_${i}`;
+                row.querySelector('span[id^="unit_label_"]').id = `unit_label_${i}`;
                 row.querySelector('.prod-input').setAttribute('oninput', `filterDropdown(this, ${i})`);
                 row.querySelector('input[type="number"]').name = `item[${i}][qty]`;
                 row.querySelector('input[type="text"][placeholder*="หมายเหตุ"]').name = `item[${i}][remark]`;
@@ -388,23 +412,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 let workbook = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
                 let rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
                 let items = [];
+                
                 rows.forEach(r => {
-                    let name = String(r[1] || '').trim().toLowerCase();
-                    let qty = parseInt(r[3] || 0);
-                    let rem = String(r[5] || '').trim();
-                    if (name && qty > 0) {
-                        let p = productsData.find(x => x.name.toLowerCase() === name || (x.sku && name.includes(x.sku.toLowerCase())));
-                        if (p) items.push({ product_id: p.id, qty: qty, remark: rem });
+                    if (!r || r.length === 0) return;
+                    
+                    let foundName = '';
+                    let foundQty = 0;
+                    let foundRem = '';
+                    
+                    r.forEach(cell => {
+                        let val = String(cell || '').trim();
+                        if (!val) return;
+                        
+                        let num = parseFloat(val);
+                        if (!isNaN(num) && num > 0 && foundQty === 0 && val.length < 10) {
+                            foundQty = num;
+                        } else if (val.length > 2 && !foundName && isNaN(val)) {
+                            foundName = val;
+                        } else if (foundName && foundQty > 0 && !foundRem && val !== foundName && val != foundQty) {
+                            foundRem = val;
+                        }
+                    });
+
+                    if (foundName && foundQty > 0) {
+                        let p = productsData.find(x => {
+                            let dbName = (x.name || '').toLowerCase().trim();
+                            let targetName = foundName.toLowerCase().trim();
+                            let dbSku = (x.sku || '').toLowerCase().trim();
+                            return dbName.includes(targetName) || targetName.includes(dbName) || (dbSku && targetName.includes(dbSku));
+                        });
+                        if (p) {
+                            items.push({ product_id: p.id, qty: foundQty, remark: foundRem });
+                        }
                     }
                 });
+
                 if (items.length) {
                     let form = document.getElementById('reqForm');
+                    document.querySelectorAll('.imported-hidden-input').forEach(el => el.remove());
+
                     [['import_as_template', '1'], ['template_name_import', document.getElementById('importTemplateName').value], ['imported_template_data', JSON.stringify(items)]].forEach(d => {
-                        let i = document.createElement('input'); i.type = 'hidden'; i.name = d[0]; i.value = d[1]; form.appendChild(i);
+                        let i = document.createElement('input'); 
+                        i.type = 'hidden'; 
+                        i.name = d[0]; 
+                        i.value = d[1]; 
+                        i.className = 'imported-hidden-input';
+                        form.appendChild(i);
                     });
                     form.submit();
                 } else {
-                    alert('ไม่พบสินค้าที่ตรงกันในไฟล์ Excel');
+                    alert('ไม่พบสินค้าที่ตรงกันในระบบ Stock (โปรดตรวจสอบชื่อสินค้าในไฟล์ Excel ให้ตรงกับในระบบ)');
                 }
             };
             reader.readAsArrayBuffer(file);

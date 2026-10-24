@@ -7,28 +7,7 @@ header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
 require_once '../db/conn.php';
 require_once '../auth_check.php';
 
-// จัดการอัปเดตราคาต้นทุนผ่าน AJAX พร้อมป้องกันค่าติดลบ
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) &&$_POST['action'] === 'update_cost') {
-    header('Content-Type: application/json; charset=utf-8');
-    $product_id = intval($_POST['product_id'] ?? 0);
-    $new_cost = floatval($_POST['cost_price'] ?? 0);
-
-    if ($product_id > 0 &&$new_cost >= 0) {
-        try {
-            $stmt =$pdo->prepare("UPDATE products SET cost_price = ? WHERE id = ?");
-            $stmt->execute([$new_cost,$product_id]);
-            echo json_encode(['status' => 'success', 'message' => 'อัปเดตราคาต้นทุนเรียบร้อยแล้ว']);
-            exit();
-        } catch (PDOException $e) {
-            echo json_encode(['status' => 'error', 'message' => 'เกิดข้อผิดพลาดในการบันทึก']);
-            exit();
-        }
-    }
-    echo json_encode(['status' => 'error', 'message' => 'ข้อมูลไม่ถูกต้อง (ราคาต้องไม่ติดลบ)']);
-    exit();
-}
-
-// ดึงข้อมูลสินค้าทั้งหมด เรียงตามรหัส SKU (ใช้ GREATEST เพื่อป้องกันค่าติดลบในระดับฐานข้อมูลถ้าต้องการ หรือปล่อยตามจริงแต่นำมาแสดงผลเป็น 0 หรือแดง)
+// ดึงข้อมูลสินค้าทั้งหมด เรียงตามรหัส SKU
 $stmt =$pdo->query("SELECT * FROM products ORDER BY sku ASC");
 $products =$stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -85,26 +64,26 @@ sort($skuGroups);
             background: #e2e8f0;
             border-radius: 4px;
         }
-
-        .cost-input:focus {
-            background: #ffffff !important;
-            border-color: #059669 !important;
-            box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.15);
-        }
     </style>
 </head>
 
 <body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
 
-    <!-- Sidebar สำหรับมือถือ (สไลด์เปิด-ปิด) และคอมพิวเตอร์ (แสดงปกติ) -->
+    <!-- Sidebar สำหรับมือถือและคอมพิวเตอร์ -->
     <div id="sidebarWrapper" class="fixed md:static inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out bg-white border-r border-slate-200 w-64 shrink-0 flex flex-col shadow-xl md:shadow-none h-full overflow-y-auto">
         <div class="flex-1 overflow-y-auto">
-            <?php if (file_exists('sidebar.php')) include 'sidebar.php'; ?>
+            <?php 
+            if (file_exists('sidebar_admin.php')) {
+                include 'sidebar_admin.php'; 
+            } elseif (file_exists('sidebar.php')) {
+                include 'sidebar.php';
+            }
+            ?>
         </div>
     </div>
 
     <!-- Background Overlay เมื่อเปิด Sidebar บนมือถือ -->
-    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden"></div>
+    <div id="sidebarBackdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden"></div>
     <main class="flex-1 flex flex-col h-full overflow-hidden bg-slate-100 w-full">
 
         <!-- Header Bar -->
@@ -113,7 +92,7 @@ sort($skuGroups);
                 <button onclick="toggleSidebar()" class="lg:hidden text-slate-600 hover:text-emerald-600 p-2 rounded-xl focus:outline-none">
                     <i class="fa-solid fa-bars text-sm"></i>
                 </button>
-                <h2 class="text-base md:text-xl font-bold text-slate-900 tracking-tight">สต็อกคงเหลือ (Inventory Status)</h2>
+                <h2 class="text-base md:text-xl font-bold text-slate-900 tracking-tight">สต็อกสินค้าคงเหลือ (Inventory Status)</h2>
             </div>
             <a href="dashboard.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2 shrink-0">
                 <i class="fa-solid fa-house text-emerald-600"></i> <span class="hidden sm:inline">หน้าหลัก</span>
@@ -122,9 +101,6 @@ sort($skuGroups);
 
         <!-- Main Body -->
         <div class="flex-1 overflow-y-auto p-4 md:p-10 space-y-6">
-
-            <!-- แจ้งเตือนสถานะการแก้ไขราคาหรือ Import -->
-            <div id="alertBox" class="hidden px-6 py-4 rounded-2xl text-sm font-medium items-center justify-between shadow-xs"></div>
 
             <?php if (isset($_GET['import'])): ?>
                 <?php if ($_GET['import'] == 'success'): ?>
@@ -144,7 +120,7 @@ sort($skuGroups);
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs gap-4">
                 <div>
                     <h3 class="text-lg md:text-2xl font-bold text-slate-900">สต็อกสินค้าคงเหลือ</h3>
-                    <p class="text-xs text-slate-500 mt-1">สามารถคลิกแก้ไขราคาต้นทุนในตารางและคลิกนอกช่องเพื่อบันทึกอัตโนมัติ (สินค้าหมดหรือเหลือ 0 จะแสดงสีแดง)</p>
+                    <p class="text-xs text-slate-500 mt-1">แสดงข้อมูลสต็อกและราคาต้นทุนสินค้าในคลัง (สินค้าหมดจะแสดงป้ายเตือนสีแดง)</p>
                 </div>
                 <div class="flex items-center gap-3 w-full md:w-auto">
                     <input type="text" id="searchSku" placeholder="🔍 ค้นหารหัสสินค้า / ชื่อ..." class="px-5 py-3 border border-slate-200 rounded-2xl text-sm w-full md:w-80 focus:outline-none focus:border-emerald-600 bg-slate-50 font-medium">
@@ -156,7 +132,7 @@ sort($skuGroups);
 
             <!-- แถบปุ่มกรองหมวดหมู่ SKU -->
             <div class="relative w-full overflow-hidden">
-                <div class="flex items-center gap-2 overflow-x-auto pb-3 pt-1 px-1 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent [-webkit-overflow-scrolling:touch]">
+                <div class="flex items-center gap-2 overflow-x-auto pb-3 pt-1 px-1 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
                     <button onclick="filterGroup('all')" id="group-all" class="group-tab px-4 py-2.5 rounded-2xl text-xs font-semibold bg-emerald-600 text-white shadow-sm transition-all shrink-0 whitespace-nowrap">
                         📂 ทั้งหมด (<?= count($products) ?>)
                     </button>
@@ -199,7 +175,9 @@ sort($skuGroups);
                                     $sku = trim($row['sku']);
                                     preg_match('/^[A-Za-z]+/', $sku, $m);$rowGroup = !empty($m[0]) ? strtoupper($m[0]) : 'OT';
                                     $searchData = strtolower(trim($row['sku'] . ' ' . $row['name'] . ' ' .$row['category']));
-                                    $stockQty = intval($row['stock_quantity'] ?? 0);
+                                    $stockQty = floatval($row['stock_quantity'] ?? 0);
+                                    $displayStock = (fmod($stockQty, 1) !== 0.0) ? $stockQty : intval($stockQty);
+                                    $costPrice = floatval($row['cost_price'] ?? 0);
                                     ?>
                                     <tr class="hover:bg-slate-50/80 transition-colors product-row" 
                                         data-sku-prefix="<?= htmlspecialchars($rowGroup, ENT_QUOTES) ?>"
@@ -211,19 +189,13 @@ sort($skuGroups);
                                         <td class="p-5">
                                             <span class="px-3 py-1 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200"><?= htmlspecialchars($row['category']) ?></span>
                                         </td>
-                                        <!-- ช่องแก้ไขราคาต้นทุนแบบ Inline (บังคับห้ามติดลบ) -->
-                                        <td class="p-5 text-right font-medium">
-                                            <div class="inline-flex items-center gap-1 justify-end">
-                                                <span class="text-slate-400 text-xs">฿</span>
-                                                <input type="number" step="0.01" min="0" value="<?= $row['cost_price'] ?>"
-                                                    data-id="<?= $row['id'] ?>"
-                                                    onchange="updateCostPrice(this)"
-                                                    class="cost-input w-28 px-3 py-1.5 text-right border border-slate-200 rounded-xl text-xs font-bold text-slate-800 bg-slate-50 transition-all">
-                                            </div>
+                                        <!-- แสดงราคาต้นทุนแบบดูได้อย่างเดียว (ReadOnly) -->
+                                        <td class="p-5 text-right font-bold text-slate-800">
+                                            ฿<?= number_format($costPrice, 2) ?>
                                         </td>
                                         <!-- แสดงผลจำนวนคงเหลือ: ถ้าน้อยกว่าหรือเท่ากับ 0 แสดงเป็นสีแดง -->
                                         <td class="p-5 text-right font-bold <?= $stockQty <= 0 ? 'text-rose-600 bg-rose-50' : 'text-brandGreen' ?>">
-                                            <?= number_format(max($stockQty, 0)) ?>
+                                            <?= $displayStock ?> <?= htmlspecialchars($row['category'] ?: 'ชิ้น') ?>
                                             <?php if ($stockQty <= 0): ?>
                                                 <span class="text-[10px] block text-rose-500 font-semibold">(สินค้าหมด!)</span>
                                             <?php endif; ?>
@@ -290,7 +262,7 @@ sort($skuGroups);
         </div>
     </div>
 
-    <!-- Script ควบคุมระบบ Sidebar, ตัวกรอง, ค้นหาแบบยืดหยุ่นด้วย some() และ Pagination -->
+    <!-- Script ควบคุมระบบ Sidebar, ตัวกรอง, ค้นหา และ Pagination -->
     <script>
         function toggleSidebar() {
             document.getElementById('sidebarWrapper').classList.toggle('-translate-x-full');
@@ -400,46 +372,6 @@ sort($skuGroups);
                 updateTablePagination();
             });
         });
-
-        // ฟังก์ชันอัปเดตราคาต้นทุนผ่าน AJAX ทันทีเมื่อแก้เสร็จ (ป้องกันค่าติดลบ)
-        function updateCostPrice(inputElement) {
-            let productId = inputElement.getAttribute('data-id');
-            let newCost = parseFloat(inputElement.value);
-
-            if (isNaN(newCost) || newCost < 0) {
-                alert('ราคาต้นทุนต้องไม่ติดลบ');
-                inputElement.value = 0;
-                newCost = 0;
-            }
-
-            let formData = new FormData();
-            formData.append('action', 'update_cost');
-            formData.append('product_id', productId);
-            formData.append('cost_price', newCost);
-
-            fetch('inventory.php', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    let alertBox = document.getElementById('alertBox');
-                    alertBox.classList.remove('hidden');
-                    alertBox.classList.add('flex');
-
-                    if (data.status === 'success') {
-                        alertBox.className = 'flex px-6 py-4 rounded-2xl text-sm font-medium items-center justify-between shadow-xs bg-emerald-50 text-emerald-800 border border-emerald-200';
-                        alertBox.innerHTML = `<span>✨ ${data.message}</span><button onclick="this.parentElement.classList.add('hidden')" class="font-bold text-xs">✕ ปิด</button>`;
-                    } else {
-                        alertBox.className = 'flex px-6 py-4 rounded-2xl text-sm font-medium items-center justify-between shadow-xs bg-rose-50 text-rose-800 border border-rose-200';
-                        alertBox.innerHTML = `<span>❌ ${data.message}</span><button onclick="this.parentElement.classList.add('hidden')" class="font-bold text-xs">✕ ปิด</button>`;
-                    }
-                    setTimeout(() => alertBox.classList.add('hidden'), 3500);
-                })
-                .catch(error => {
-                    alert('เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อบันทึกราคา');
-                });
-        }
 
         function openImportModal() {
             let modal = document.getElementById('importModal');

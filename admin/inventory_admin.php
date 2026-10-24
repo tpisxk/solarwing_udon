@@ -417,7 +417,7 @@ sort($skuGroups);
             formData.append('product_id', productId);
             formData.append('cost_price', newCost);
 
-            fetch('inventory.php', {
+            fetch('inventory_admin.php', {
                     method: 'POST',
                     body: formData
                 })

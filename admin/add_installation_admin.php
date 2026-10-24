@@ -98,16 +98,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $meter_no,
                 $meter_type,
                 $system_type,
-                $mea_pea_connection,
-                $warranty,
-                $om,
-                $roof_change,
-                $structure_addition,
-                $panel_spec, 
-                $inverter_spec, 
-                $mounting, 
-                $connection_points,
-                $walk_way,
+                $mea_pea_connection,$warranty,
+                $om,$roof_change,
+                $structure_addition,$panel_spec, 
+                $inverter_spec,$mounting, 
+                $connection_points,$walk_way,
                 $installation_req,$work_safety_req,
                 $zero_export,$string_monitoring,
                 $other_components,$payment_terms_json
@@ -168,7 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
             <div>
-                <a href="work_progress.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 md:px-4 py-2.5 rounded-2xl text-xs md:text-sm font-semibold transition-all flex items-center gap-2 shrink-0">
+                <a href="dashboard_admin.php" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 md:px-4 py-2.5 rounded-2xl text-xs md:text-sm font-semibold transition-all flex items-center gap-2 shrink-0">
                     <i class="fa-solid fa-arrow-left text-xs"></i> <span class="hidden sm:inline">กลับหน้ารายการ</span>
                 </a>
             </div>
@@ -201,11 +196,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Project Sale No. *</label>
-                                <input type="text" name="project_sale_no" value="SW-26090012" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="project_sale_no" value="" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Location (Lat/Long)</label>
-                                <input type="text" name="lat_long" value="17.882837,102.748563" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="lat_long" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                         </div>
 
@@ -216,33 +211,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </div>
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Installation Address</label>
-                                <input type="text" name="installation_address" value="36/12 ถนนพานพร้าว ต.หมากแข้ง อ.เมืองอุดรธานี จ.อุดรธานี" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="installation_address" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Project Name *</label>
-                                <input type="text" name="name" value="กรรมการผู้จัดการ" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="name" value="" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Billing Address</label>
-                                <input type="text" name="billing_address" value="36/12 ถนนพานพร้าว ต.หมากแข้ง อ.เมืองอุดรธานี จ.อุดรธานี" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="billing_address" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Customer Name</label>
-                                <input type="text" name="customer_name" value="บริษัท ไฟเอร์ มาร์เก็ต จำกัด (สาขา 00001)" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="customer_name" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Contract Person</label>
-                                <input type="text" name="contract_person" value="บริษัท ไฟเอร์ มาร์เก็ต จำกัด (สาขา 00001)" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="contract_person" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Sales Representative</label>
-                                <input type="text" name="sales_rep" value="Suwichan" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="sales_rep" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                         </div>
 
@@ -253,7 +248,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </div>
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">System Capacity (ขนาดติดตั้ง)</label>
-                                <input type="text" name="system_size" value="108.36" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                                <input type="text" name="system_size" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
                             </div>
                         </div>
 
@@ -265,11 +260,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         <!-- เงื่อนไขการชำระเงิน (Payment Terms) -->
                         <div class="space-y-3 pt-2">
-                            <div class="flex items-center justify-between">
-                                <label class="block text-xs font-bold text-slate-700 uppercase">เงื่อนไขการชำระเงิน (Payment Terms)</label>
-                                <button type="button" onclick="addInstallmentRow()" class="bg-emerald-50 hover:bg-emerald-100 text-brandGreen px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-emerald-200">
-                                    <i class="fa-solid fa-plus text-[10px]"></i> เพิ่มงวด
-                                </button>
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 uppercase">เงื่อนไขการชำระเงิน (Payment Terms)</label>
+                                    <span id="averagePctDisplay" class="text-[11px] font-semibold text-emerald-600 mt-0.5 block"></span>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button type="button" onclick="distributeEvenly()" class="bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-blue-200">
+                                        <i class="fa-solid fa-calculator text-[10px]"></i> เฉลี่ย % เท่ากัน
+                                    </button>
+                                    <button type="button" onclick="addInstallmentRow()" class="bg-emerald-50 hover:bg-emerald-100 text-brandGreen px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-emerald-200">
+                                        <i class="fa-solid fa-plus text-[10px]"></i> เพิ่มงวด
+                                    </button>
+                                </div>
                             </div>
 
                             <div class="space-y-2 overflow-x-auto">
@@ -285,9 +288,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <!-- งวดที่ 1 -->
                                     <div class="grid grid-cols-12 gap-2 items-center installment-row">
                                         <div class="col-span-2 text-center font-bold text-xs text-slate-600 installment-label">งวด 1</div>
-                                        <div class="col-span-3"><input type="text" name="installment[0][pct]" value="30" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                        <div class="col-span-4"><input type="text" name="installment[0][desc]" value="เมื่อตกลงราคา" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                        <div class="col-span-2"><input type="text" name="installment[0][amt]" value="465,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
+                                        <div class="col-span-3"><input type="text" name="installment[0][pct]" value="25" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-4"><input type="text" name="installment[0][desc]" value="มัดจำทำสัญญา" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-2"><input type="text" name="installment[0][amt]" value="" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
                                         <div class="col-span-1 text-center">
                                             <button type="button" onclick="removeInstallmentRow(this)" class="text-rose-500 hover:text-rose-700 p-2 text-xs"><i class="fa-solid fa-trash-can"></i></button>
                                         </div>
@@ -296,9 +299,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <!-- งวดที่ 2 -->
                                     <div class="grid grid-cols-12 gap-2 items-center installment-row">
                                         <div class="col-span-2 text-center font-bold text-xs text-slate-600 installment-label">งวด 2</div>
-                                        <div class="col-span-3"><input type="text" name="installment[1][pct]" value="30" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                        <div class="col-span-4"><input type="text" name="installment[1][desc]" value="เมื่อส่งแผงโซล่าร์ถึงหน้างานพร้อมติดตั้ง" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                        <div class="col-span-2"><input type="text" name="installment[1][amt]" value="465,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
+                                        <div class="col-span-3"><input type="text" name="installment[1][pct]" value="25" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-4"><input type="text" name="installment[1][desc]" value="จัดส่งอุปกรณ์เข้าหน้างาน" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-2"><input type="text" name="installment[1][amt]" value="" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
                                         <div class="col-span-1 text-center">
                                             <button type="button" onclick="removeInstallmentRow(this)" class="text-rose-500 hover:text-rose-700 p-2 text-xs"><i class="fa-solid fa-trash-can"></i></button>
                                         </div>
@@ -307,9 +310,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <!-- งวดที่ 3 -->
                                     <div class="grid grid-cols-12 gap-2 items-center installment-row">
                                         <div class="col-span-2 text-center font-bold text-xs text-slate-600 installment-label">งวด 3</div>
-                                        <div class="col-span-3"><input type="text" name="installment[2][pct]" value="30" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                        <div class="col-span-4"><input type="text" name="installment[2][desc]" value="เมื่อติดตั้งระบบแล้วเสร็จและจ่ายไฟเข้าระบบ" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                        <div class="col-span-2"><input type="text" name="installment[2][amt]" value="465,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
+                                        <div class="col-span-3"><input type="text" name="installment[2][pct]" value="25" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-4"><input type="text" name="installment[2][desc]" value="ติดตั้งงานโครงสร้างและอุปกรณ์" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-2"><input type="text" name="installment[2][amt]" value="" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
                                         <div class="col-span-1 text-center">
                                             <button type="button" onclick="removeInstallmentRow(this)" class="text-rose-500 hover:text-rose-700 p-2 text-xs"><i class="fa-solid fa-trash-can"></i></button>
                                         </div>
@@ -318,9 +321,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <!-- งวดที่ 4 -->
                                     <div class="grid grid-cols-12 gap-2 items-center installment-row">
                                         <div class="col-span-2 text-center font-bold text-xs text-slate-600 installment-label">งวด 4</div>
-                                        <div class="col-span-3"><input type="text" name="installment[3][pct]" value="10" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                        <div class="col-span-4"><input type="text" name="installment[3][desc]" value="เมื่อจ่ายไฟเข้าระบบครบ 15 วัน" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                                        <div class="col-span-2"><input type="text" name="installment[3][amt]" value="155,000" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
+                                        <div class="col-span-3"><input type="text" name="installment[3][pct]" value="25" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-4"><input type="text" name="installment[3][desc]" value="ทดสอบระบบและส่งมอบงาน" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                                        <div class="col-span-2"><input type="text" name="installment[3][amt]" value="" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
                                         <div class="col-span-1 text-center">
                                             <button type="button" onclick="removeInstallmentRow(this)" class="text-rose-500 hover:text-rose-700 p-2 text-xs"><i class="fa-solid fa-trash-can"></i></button>
                                         </div>
@@ -335,35 +338,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">Meter #</label>
-                                    <input type="text" name="meter_no" value="n/a" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="meter_no" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">Meter Type</label>
-                                    <input type="text" name="meter_type" value="3 Phase" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="meter_type" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">System Type</label>
-                                    <input type="text" name="system_type" value="Ongrid" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="system_type" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">MEA / PEA Connection</label>
-                                    <input type="text" name="mea_pea_connection" value="PEA" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="mea_pea_connection" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">Warranty</label>
-                                    <input type="text" name="warranty" value="5 Years" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="warranty" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">O&M</label>
-                                    <input type="text" name="om" value="2 time / year" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="om" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">Roof Change</label>
-                                    <input type="text" name="roof_change" value="No" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="roof_change" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">Structure Addition</label>
-                                    <input type="text" name="structure_addition" value="No" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="structure_addition" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                             </div>
                         </div>
@@ -374,32 +377,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">Panel</label>
-                                    <input type="text" name="panel_spec" value="Longi / Himo X 10 -645M จำนวน 168 แผง" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="panel_spec" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">Inverter</label>
-                                    <input type="text" name="inverter_spec" value="Huawei/SUN2000-100KTL-M2/100KM 1 เครื่อง" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="inverter_spec" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">Mounting</label>
-                                    <input type="text" name="mounting" value="Metalsheet" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="mounting" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">Connection Points</label>
-                                    <input type="text" name="connection_points" value="1" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="connection_points" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">Walk way</label>
-                                    <input type="text" name="walk_way" value="Yes" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="walk_way" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">Installation</label>
-                                    <input type="text" name="installation_req" value="Yes / Water" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="installation_req" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                             </div>
                             <div class="space-y-1">
                                 <label class="block text-xs font-bold text-slate-600 uppercase">Work Safety Requirement</label>
-                                <input type="text" name="work_safety_req" value="บริษัท ไฟเอร์ มาร์เก็ต จำกัด (สาขา 00001)" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                <input type="text" name="work_safety_req" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                             </div>
                         </div>
 
@@ -409,15 +412,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">Zero Export</label>
-                                    <input type="text" name="zero_export" value="Yes" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="zero_export" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">String Monitoring</label>
-                                    <input type="text" name="string_monitoring" value="No" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="string_monitoring" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="block text-xs font-bold text-slate-600 uppercase">Other special components</label>
-                                    <input type="text" name="other_components" value="-" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
+                                    <input type="text" name="other_components" value="" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm">
                                 </div>
                             </div>
                         </div>
@@ -446,58 +449,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             overlay.classList.toggle('hidden');
         }
 
+        // คำนวณยอดเงินตามเปอร์เซ็นต์ และคำนวณ % รวม/เฉลี่ย
         function calculateInstallments() {
             const totalPriceInput = document.getElementById('total_price_input');
             const totalPrice = parseFloat(totalPriceInput.value.replace(/,/g, '')) || 0;
             const rows = document.querySelectorAll('.installment-row');
             
+            let totalPct = 0;
+            let countPct = 0;
+
             rows.forEach((row) => {
                 const pctInput = row.querySelector('.pct-input');
                 const amtInput = row.querySelector('.amt-input');
-
+                
                 if (pctInput && amtInput) {
-                    const pctVal = parseFloat(pctInput.value.replace(/[^0-9.]/g, '')) || 0;
-                    if (totalPrice > 0 && pctVal > 0) {
-                        const calculatedAmt = (totalPrice * pctVal) / 100;
-                        amtInput.value = calculatedAmt.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                    const pct = parseFloat(pctInput.value) || 0;
+                    if (pct > 0) {
+                        totalPct += pct;
+                        countPct++;
+                    }
+                    if (totalPrice > 0) {
+                        const calculatedAmount = (totalPrice * pct) / 100;
+                        amtInput.value = calculatedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                 }
             });
+
+            // คำนวณ % เฉลี่ยจากงวดที่มีการกรอกข้อมูล
+            const avgPct = countPct > 0 ? (totalPct / countPct).toFixed(2) : 0;
+            const avgDisplay = document.getElementById('averagePctDisplay');
+            if (avgDisplay) {
+                avgDisplay.innerText = `รวม: ${totalPct}% (เฉลี่ยต่องวด: ${avgPct}%)`;
+                if (totalPct === 100) {
+                    avgDisplay.className = "text-[11px] font-bold text-emerald-600 mt-0.5 block";
+                } else {
+                    avgDisplay.className = "text-[11px] font-bold text-amber-600 mt-0.5 block";
+                }
+            }
+        }
+
+        // เฉลี่ย % เท่ากันทุกงวด
+        function distributeEvenly() {
+            const rows = document.querySelectorAll('.installment-row');
+            const count = rows.length;
+            if (count === 0) return;
+
+            const evenPct = (100 / count).toFixed(2);
+            rows.forEach((row) => {
+                const pctInput = row.querySelector('.pct-input');
+                if (pctInput) {
+                    pctInput.value = evenPct;
+                }
+            });
+            calculateInstallments();
         }
 
         function addInstallmentRow() {
             const container = document.getElementById('installmentContainer');
             const rowCount = container.querySelectorAll('.installment-row').length;
-            
+            const newIndex = rowCount;
+
             const newRow = document.createElement('div');
             newRow.className = 'grid grid-cols-12 gap-2 items-center installment-row';
             newRow.innerHTML = `
-                <div class="col-span-2 text-center font-bold text-xs text-slate-600 installment-label">งวด ${rowCount + 1}</div>
-                <div class="col-span-3"><input type="text" name="installment[${rowCount}][pct]" value="0" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                <div class="col-span-4"><input type="text" name="installment[${rowCount}][desc]" placeholder="รายละเอียดงวด..." class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
-                <div class="col-span-2"><input type="text" name="installment[${rowCount}][amt]" value="0" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
+                <div class="col-span-2 text-center font-bold text-xs text-slate-600 installment-label">งวด ${newIndex + 1}</div>
+                <div class="col-span-3"><input type="text" name="installment[${newIndex}][pct]" value="" oninput="calculateInstallments()" class="pct-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                <div class="col-span-4"><input type="text" name="installment[${newIndex}][desc]" value="" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"></div>
+                <div class="col-span-2"><input type="text" name="installment[${newIndex}][amt]" value="" class="amt-input w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"></div>
                 <div class="col-span-1 text-center">
                     <button type="button" onclick="removeInstallmentRow(this)" class="text-rose-500 hover:text-rose-700 p-2 text-xs"><i class="fa-solid fa-trash-can"></i></button>
                 </div>
             `;
             container.appendChild(newRow);
             updateInstallmentLabels();
+            calculateInstallments();
         }
 
-        function removeInstallmentRow(btn) {
-            const row = btn.closest('.installment-row');
+        function removeInstallmentRow(button) {
+            const row = button.closest('.installment-row');
             const container = document.getElementById('installmentContainer');
+            
             if (container.querySelectorAll('.installment-row').length > 1) {
                 row.remove();
                 updateInstallmentLabels();
                 calculateInstallments();
             } else {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'ไม่สามารถลบได้',
-                    text: 'ต้องมีงวดชำระเงินอย่างน้อย 1 งวด',
-                    confirmButtonColor: '#059669'
-                });
+                alert('ต้องมีเงื่อนไขการชำระเงินอย่างน้อย 1 งวด');
             }
         }
 
@@ -506,31 +543,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             rows.forEach((row, index) => {
                 const label = row.querySelector('.installment-label');
                 if (label) {
-                    label.textContent = `งวด ${index + 1}`;
+                    label.innerText = `งวด ${index + 1}`;
                 }
-                // อัปเดต attribute name ให้เรียงลำดับใหม่ถูกต้องตอน submit
                 const inputs = row.querySelectorAll('input');
                 inputs.forEach(input => {
-                    const nameAttr = input.getAttribute('name');
-                    if (nameAttr) {
-                        const newName = nameAttr.replace(/\[\d+\]/, `[${index}]`);
+                    const name = input.getAttribute('name');
+                    if (name) {
+                        const newName = name.replace(/\[\d+\]/, `[${index}]`);
                         input.setAttribute('name', newName);
                     }
                 });
             });
         }
 
+        // คำนวณครั้งแรกทันทีเมื่อโหลดหน้าเว็บ
+        document.addEventListener('DOMContentLoaded', () => {
+            calculateInstallments();
+        });
+
         <?php if ($swal_success): ?>
         Swal.fire({
             icon: 'success',
-            title: 'บันทึกข้อมูลสำเร็จ!',
-            text: 'ข้อมูล Project Design ถูกบันทึกลงตาราง project_designs เรียบร้อยแล้ว',
+            title: 'บันทึกสำเร็จ!',
+            text: 'ข้อมูล Project Design ถูกบันทึกลงระบบเรียบร้อยแล้ว',
             confirmButtonText: 'ตกลง',
             confirmButtonColor: '#059669',
             allowOutsideClick: false
         }).then((result) => {
             if (result.isConfirmed) {
-                window.location.href = 'add_installation_admin.php';
+                window.location.href = 'dashboard_admin.php';
             }
         });
         <?php endif; ?>

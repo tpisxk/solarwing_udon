@@ -4,12 +4,13 @@ header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Cache-Control: post-check=0, pre-check=0", false);
 header("Pragma: no-cache");
 header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
+
 require_once '../db/conn.php';
 require_once '../auth_check.php';
-$current_page = 'billing'; // กำหนดหน้าปัจจุบันสำหรับ Sidebar
+$current_page = 'billing';
 
-// รับค่าโครงการที่ถูกเลือกจาก Dropdown ตัวกรอง (ถ้ามี)
-$selected_installation_id = isset($_GET['installation_id']) && $_GET['installation_id'] !== '' ? intval($_GET['installation_id']) : 'all';
+// รับค่าโครงการที่ถูกเลือกจาก Dropdown ตัวกรอง
+$selected_installation_id = isset($_GET['installation_id']) && $_GET['installation_id'] !== '' ? $_GET['installation_id'] : 'all';
 
 // รับค่าจำนวนแถวต่อหน้า (ค่าเริ่มต้น 5 แถว)
 $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 5;
@@ -17,7 +18,6 @@ if (!in_array($limit, [5, 10, 25, 50, 100])) { $limit = 5; }
 
 $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
 if ($page < 1) $page = 1;
-$offset = ($page - 1) * $limit;
 
 // 1. ดึงรายชื่อโครงการทั้งหมดสำหรับใส่ใน Dropdown
 try {
@@ -30,9 +30,9 @@ try {
 // เงื่อนไขการกรอง
 $where_clause = "";
 $params = [];
-if ($selected_installation_id !== 'all') {
+if ($selected_installation_id !== 'all' && intval($selected_installation_id) > 0) {
     $where_clause = " WHERE b.installation_id = ? ";
-    $params[] = $selected_installation_id;
+    $params[] = intval($selected_installation_id);
 }
 
 // 2. ดึงข้อมูลเอกสารทางบัญชี
@@ -41,6 +41,7 @@ try {
     $stmt_c = $pdo->prepare($sql_count);
     $stmt_c->execute($params);
     $total_rows = $stmt_c->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
+
     $total_pages = ceil($total_rows / $limit);
     if ($total_pages < 1) $total_pages = 1;
     if ($page > $total_pages) $page = $total_pages;
@@ -51,7 +52,8 @@ try {
         FROM project_billings b 
         LEFT JOIN installations i ON b.installation_id = i.id 
         $where_clause
-        ORDER BY b.created_at DESC LIMIT $limit OFFSET $offset
+        ORDER BY b.created_at DESC 
+        LIMIT $limit OFFSET $offset
     ";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
@@ -60,6 +62,7 @@ try {
     $billingsList = [];
     $total_pages = 1;
     $total_rows = 0;
+    $offset = 0;
 }
 
 // ฟังก์ชันแปลงรูปแบบวันที่
@@ -156,7 +159,7 @@ function formatDateTH($datetime_str) {
 
                 <form method="GET" action="" class="flex items-center gap-3 w-full md:w-auto">
                     <select name="installation_id" onchange="this.form.submit()" class="w-full md:w-72 px-4 py-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-semibold text-slate-700 cursor-pointer">
-                        <option value="all">-- แสดงทุกโครงการทั้งหมด --</option>
+                        <option value="all" <?= ($selected_installation_id === 'all') ? 'selected' : '' ?>>-- แสดงทุกโครงการทั้งหมด --</option>
                         <?php foreach ($installationsDropdown as $inst): ?>
                             <option value="<?= $inst['id'] ?>" <?= ($selected_installation_id == $inst['id']) ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($inst['name']) ?>
@@ -296,7 +299,7 @@ function formatDateTH($datetime_str) {
                         <div class="flex items-center gap-2">
                             <span class="font-medium">แสดง:</span>
                             <form method="GET" action="" class="inline-block">
-                                <input type="hidden" name="installation_id" value="<?= $selected_installation_id ?>">
+                                <input type="hidden" name="installation_id" value="<?= htmlspecialchars($selected_installation_id) ?>">
                                 <select name="limit" onchange="this.form.submit()" class="px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-semibold text-slate-700 cursor-pointer">
                                     <option value="5" <?= ($limit == 5) ? 'selected' : '' ?>>5 แถว</option>
                                     <option value="10" <?= ($limit == 10) ? 'selected' : '' ?>>10 แถว</option>
@@ -312,7 +315,7 @@ function formatDateTH($datetime_str) {
                                 <?php 
                                 $prev_page = $page - 1;
                                 if ($page > 1) {
-                                    echo '<a href="?installation_id=' . $selected_installation_id . '&limit=' . $limit . '&page=' . $prev_page . '" class="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition"><i class="fa-solid fa-chevron-left text-xs"></i></a>';
+                                    echo '<a href="?installation_id=' . urlencode($selected_installation_id) . '&limit=' . $limit . '&page=' . $prev_page . '" class="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition"><i class="fa-solid fa-chevron-left text-xs"></i></a>';
                                 } else {
                                     echo '<span class="w-8 h-8 rounded-full border border-slate-100 flex items-center justify-center text-slate-300 cursor-not-allowed"><i class="fa-solid fa-chevron-left text-xs"></i></span>';
                                 }
@@ -322,7 +325,7 @@ function formatDateTH($datetime_str) {
                                         if ($i == $page) {
                                             echo '<span class="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center shadow-xs text-xs">' . $i . '</span>';
                                         } else {
-                                            echo '<a href="?installation_id=' . $selected_installation_id . '&limit=' . $limit . '&page=' . $i . '" class="w-8 h-8 rounded-full border border-slate-200 text-slate-700 font-semibold flex items-center justify-center hover:bg-slate-100 transition text-xs">' . $i . '</a>';
+                                            echo '<a href="?installation_id=' . urlencode($selected_installation_id) . '&limit=' . $limit . '&page=' . $i . '" class="w-8 h-8 rounded-full border border-slate-200 text-slate-700 font-semibold flex items-center justify-center hover:bg-slate-100 transition text-xs">' . $i . '</a>';
                                         }
                                     } elseif ($i == $page - 2 || $i == $page + 2) {
                                         echo '<span class="px-1 text-slate-400 text-xs">...</span>';
@@ -331,7 +334,7 @@ function formatDateTH($datetime_str) {
 
                                 $next_page = $page + 1;
                                 if ($page < $total_pages) {
-                                    echo '<a href="?installation_id=' . $selected_installation_id . '&limit=' . $limit . '&page=' . $next_page . '" class="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition"><i class="fa-solid fa-chevron-right text-xs"></i></a>';
+                                    echo '<a href="?installation_id=' . urlencode($selected_installation_id) . '&limit=' . $limit . '&page=' . $next_page . '" class="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition"><i class="fa-solid fa-chevron-right text-xs"></i></a>';
                                 } else {
                                     echo '<span class="w-8 h-8 rounded-full border border-slate-100 flex items-center justify-center text-slate-300 cursor-not-allowed"><i class="fa-solid fa-chevron-right text-xs"></i></span>';
                                 }
@@ -362,6 +365,13 @@ function formatDateTH($datetime_str) {
     </div>
 
     <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebarWrapper');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            sidebar.classList.toggle('-translate-x-full');
+            backdrop.classList.toggle('hidden');
+        }
+
         function openImageModal(imgSrc) {
             document.getElementById('modalReceiptImg').src = imgSrc;
             let modal = document.getElementById('imageModal');

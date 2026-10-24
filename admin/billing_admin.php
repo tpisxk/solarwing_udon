@@ -4,65 +4,22 @@ header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Cache-Control: post-check=0, pre-check=0", false);
 header("Pragma: no-cache");
 header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
+
 require_once '../db/conn.php';
 require_once '../auth_check.php';
-$current_page = 'billing';
+$current_page = 'billing_admin';
 
-// -------------------------------------------------------------------------
-// ส่วนที่ 1: ประมวลผลการอัปโหลดเอกสาร (เมื่อกด Submit ฟอร์ม)
-// -------------------------------------------------------------------------
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'upload_billing') {
-    $installation_id = intval($_POST['installation_id'] ?? 0);
-    $doc_type        = trim($_POST['doc_type'] ?? '');
-    $doc_title       = trim($_POST['doc_title'] ?? '');
+// รับค่าโครงการที่ถูกเลือกจาก Dropdown ตัวกรอง
+$selected_installation_id = isset($_GET['installation_id']) && $_GET['installation_id'] !== '' ? $_GET['installation_id'] : 'all';
 
-    if ($installation_id > 0 && !empty($doc_type) && !empty($doc_title) && isset($_FILES['document_file'])) {
-        $file = $_FILES['document_file'];
-        if ($file['error'] === UPLOAD_ERR_OK) {
-            $file_name = $file['name'];
-            $file_tmp  = $file['tmp_name'];
-            $ext       = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
-            $allowed   = ['jpg', 'jpeg', 'png', 'pdf'];
-
-            if (in_array($ext, $allowed)) {
-                $upload_dir = '../uploads/billings/';
-                if (!is_dir($upload_dir)) {
-                    mkdir($upload_dir, 0777, true);
-                }
-
-                $new_filename = 'billing_' . time() . '_' . mt_rand(1000, 9999) . '.' . $ext;
-                $destination = $upload_dir . $new_filename;
-
-                if (move_uploaded_file($file_tmp, $destination)) {
-                    try {
-                        $stmt = $pdo->prepare("INSERT INTO project_billings (installation_id, doc_type, doc_title, file_path, created_at) VALUES (?, ?, ?, ?, NOW())");
-                        $stmt->execute([$installation_id, $doc_type, $doc_title, $new_filename]);
-                        header("Location: billing_admin.php?status=success");
-                        exit();
-                    } catch (PDOException $e) {
-                        header("Location: billing_admin.php?status=error");
-                        exit();
-                    }
-                }
-            }
-        }
-    }
-    header("Location: billing_admin.php?status=error");
-    exit();
-}
-
-// -------------------------------------------------------------------------
-// ส่วนที่ 2: การดึงข้อมูลและจัดการแสดงผลตาราง
-// -------------------------------------------------------------------------
-$selected_installation_id = isset($_GET['installation_id']) && $_GET['installation_id'] !== '' ? intval($_GET['installation_id']) : 'all';
-
+// รับค่าจำนวนแถวต่อหน้า (ค่าเริ่มต้น 5 แถว)
 $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 5;
 if (!in_array($limit, [5, 10, 25, 50, 100])) { $limit = 5; }
 
 $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
 if ($page < 1) $page = 1;
-$offset = ($page - 1) * $limit;
 
+// 1. ดึงรายชื่อโครงการทั้งหมดสำหรับใส่ใน Dropdown
 try {
     $stmt_inst_list = $pdo->query("SELECT id, name FROM installations ORDER BY id DESC");
     $installationsDropdown = $stmt_inst_list->fetchAll(PDO::FETCH_ASSOC);
@@ -70,18 +27,21 @@ try {
     $installationsDropdown = [];
 }
 
+// เงื่อนไขการกรอง
 $where_clause = "";
 $params = [];
-if ($selected_installation_id !== 'all') {
+if ($selected_installation_id !== 'all' && intval($selected_installation_id) > 0) {
     $where_clause = " WHERE b.installation_id = ? ";
-    $params[] = $selected_installation_id;
+    $params[] = intval($selected_installation_id);
 }
 
+// 2. ดึงข้อมูลเอกสารทางบัญชี
 try {
     $sql_count = "SELECT COUNT(*) as total FROM project_billings b " . $where_clause;
     $stmt_c = $pdo->prepare($sql_count);
     $stmt_c->execute($params);
     $total_rows = $stmt_c->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
+
     $total_pages = ceil($total_rows / $limit);
     if ($total_pages < 1) $total_pages = 1;
     if ($page > $total_pages) $page = $total_pages;
@@ -92,7 +52,8 @@ try {
         FROM project_billings b 
         LEFT JOIN installations i ON b.installation_id = i.id 
         $where_clause
-        ORDER BY b.created_at DESC LIMIT $limit OFFSET $offset
+        ORDER BY b.created_at DESC 
+        LIMIT $limit OFFSET $offset
     ";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
@@ -101,8 +62,10 @@ try {
     $billingsList = [];
     $total_pages = 1;
     $total_rows = 0;
+    $offset = 0;
 }
 
+// ฟังก์ชันแปลงรูปแบบวันที่
 function formatDateTH($datetime_str) {
     if (empty($datetime_str)) return '-';
     $timestamp = strtotime($datetime_str);
@@ -141,14 +104,8 @@ function formatDateTH($datetime_str) {
 <body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
 
     <!-- Sidebar -->
-    <div id="sidebarWrapper" class="fixed inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 md:static transition-transform duration-300 ease-in-out shrink-0">
-        <?php 
-        if (file_exists('sidebar_admin.php')) {
-            include 'sidebar_admin.php'; 
-        } elseif (file_exists('sidebar_admin.php')) {
-            include 'sidebar_admin.php';
-        }
-        ?>
+    <div id="sidebarWrapper" class="fixed inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 md:static transition-transform duration-300 ease-in-out">
+        <?php if (file_exists('sidebar_admin.php')) include 'sidebar_admin.php'; ?>
     </div>
     <div id="sidebarBackdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden backdrop-blur-sm"></div>
 
@@ -202,7 +159,7 @@ function formatDateTH($datetime_str) {
 
                 <form method="GET" action="" class="flex items-center gap-3 w-full md:w-auto">
                     <select name="installation_id" onchange="this.form.submit()" class="w-full md:w-72 px-4 py-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-semibold text-slate-700 cursor-pointer">
-                        <option value="all">-- แสดงทุกโครงการทั้งหมด --</option>
+                        <option value="all" <?= ($selected_installation_id === 'all') ? 'selected' : '' ?>>-- แสดงทุกโครงการทั้งหมด --</option>
                         <?php foreach ($installationsDropdown as $inst): ?>
                             <option value="<?= $inst['id'] ?>" <?= ($selected_installation_id == $inst['id']) ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($inst['name']) ?>
@@ -213,16 +170,14 @@ function formatDateTH($datetime_str) {
                 </form>
             </div>
 
-            <!-- ฟอร์มแนบเอกสารใหม่ (ส่งเข้าหน้าเดียวกัน billing.php) -->
+            <!-- ฟอร์มแนบเอกสารใหม่ -->
             <div class="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
                 <div>
                     <h3 class="text-base md:text-lg font-bold text-slate-900">แนบเอกสารทางบัญชีใหม่</h3>
                     <p class="text-xs text-slate-500 mt-1">อัปโหลดไฟล์ใบวางบิล, ใบกำกับภาษี หรือใบหัก ณ ที่จ่าย (รองรับไฟล์รูปภาพ JPG, PNG และ PDF)</p>
                 </div>
 
-                <form action="billing_admin.php" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-6 gap-4">
-                    <input type="hidden" name="action" value="upload_billing">
-
+                <form action="billing_process_admin.php" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-6 gap-4">
                     <div class="space-y-1.5 md:col-span-2">
                         <label class="block text-xs font-semibold text-slate-600">เลือกโครงการ / หน้างาน</label>
                         <select name="installation_id" required class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-medium">
@@ -285,7 +240,13 @@ function formatDateTH($datetime_str) {
                                     $ext = strtolower(pathinfo($file_path, PATHINFO_EXTENSION));
                                     $full_url = '';
                                     if ($file_path !== '') {
-                                        $full_url = '../uploads/billings/' . $file_path;
+                                        if (preg_match('/^http?:\/\//i', $file_path) || preg_match('/^\//', $file_path)) {
+                                            $full_url = $file_path;
+                                        } else {
+                                            $clean = preg_replace('#^(\.\./)+#', '', $file_path);
+                                            $clean = preg_replace('#^(uploads/billings/|uploads/)+#', '', $clean);
+                                            $full_url = '../uploads/billings/' . $clean;
+                                        }
                                     }
                                 ?>
                                     <tr class="hover:bg-slate-50/80 transition-all">
@@ -338,7 +299,7 @@ function formatDateTH($datetime_str) {
                         <div class="flex items-center gap-2">
                             <span class="font-medium">แสดง:</span>
                             <form method="GET" action="" class="inline-block">
-                                <input type="hidden" name="installation_id" value="<?= $selected_installation_id ?>">
+                                <input type="hidden" name="installation_id" value="<?= htmlspecialchars($selected_installation_id) ?>">
                                 <select name="limit" onchange="this.form.submit()" class="px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-semibold text-slate-700 cursor-pointer">
                                     <option value="5" <?= ($limit == 5) ? 'selected' : '' ?>>5 แถว</option>
                                     <option value="10" <?= ($limit == 10) ? 'selected' : '' ?>>10 แถว</option>
@@ -354,7 +315,7 @@ function formatDateTH($datetime_str) {
                                 <?php 
                                 $prev_page = $page - 1;
                                 if ($page > 1) {
-                                    echo '<a href="?installation_id=' . $selected_installation_id . '&limit=' . $limit . '&page=' . $prev_page . '" class="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition"><i class="fa-solid fa-chevron-left text-xs"></i></a>';
+                                    echo '<a href="?installation_id=' . urlencode($selected_installation_id) . '&limit=' . $limit . '&page=' . $prev_page . '" class="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition"><i class="fa-solid fa-chevron-left text-xs"></i></a>';
                                 } else {
                                     echo '<span class="w-8 h-8 rounded-full border border-slate-100 flex items-center justify-center text-slate-300 cursor-not-allowed"><i class="fa-solid fa-chevron-left text-xs"></i></span>';
                                 }
@@ -364,7 +325,7 @@ function formatDateTH($datetime_str) {
                                         if ($i == $page) {
                                             echo '<span class="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center shadow-xs text-xs">' . $i . '</span>';
                                         } else {
-                                            echo '<a href="?installation_id=' . $selected_installation_id . '&limit=' . $limit . '&page=' . $i . '" class="w-8 h-8 rounded-full border border-slate-200 text-slate-700 font-semibold flex items-center justify-center hover:bg-slate-100 transition text-xs">' . $i . '</a>';
+                                            echo '<a href="?installation_id=' . urlencode($selected_installation_id) . '&limit=' . $limit . '&page=' . $i . '" class="w-8 h-8 rounded-full border border-slate-200 text-slate-700 font-semibold flex items-center justify-center hover:bg-slate-100 transition text-xs">' . $i . '</a>';
                                         }
                                     } elseif ($i == $page - 2 || $i == $page + 2) {
                                         echo '<span class="px-1 text-slate-400 text-xs">...</span>';
@@ -373,7 +334,7 @@ function formatDateTH($datetime_str) {
 
                                 $next_page = $page + 1;
                                 if ($page < $total_pages) {
-                                    echo '<a href="?installation_id=' . $selected_installation_id . '&limit=' . $limit . '&page=' . $next_page . '" class="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition"><i class="fa-solid fa-chevron-right text-xs"></i></a>';
+                                    echo '<a href="?installation_id=' . urlencode($selected_installation_id) . '&limit=' . $limit . '&page=' . $next_page . '" class="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition"><i class="fa-solid fa-chevron-right text-xs"></i></a>';
                                 } else {
                                     echo '<span class="w-8 h-8 rounded-full border border-slate-100 flex items-center justify-center text-slate-300 cursor-not-allowed"><i class="fa-solid fa-chevron-right text-xs"></i></span>';
                                 }
@@ -405,8 +366,10 @@ function formatDateTH($datetime_str) {
 
     <script>
         function toggleSidebar() {
-            document.getElementById('sidebarWrapper').classList.toggle('-translate-x-full');
-            document.getElementById('sidebarBackdrop').classList.toggle('hidden');
+            const sidebar = document.getElementById('sidebarWrapper');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            sidebar.classList.toggle('-translate-x-full');
+            backdrop.classList.toggle('hidden');
         }
 
         function openImageModal(imgSrc) {

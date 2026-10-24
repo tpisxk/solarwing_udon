@@ -30,7 +30,7 @@ try {
 $current_page = 'user_requisitions';
 
 // =========================================================================
-// 1. ประมวลผล AJAX (จ่ายสินค้า / รับคืนสินค้า / ตัด-คืนสต็อก + ล็อกราคา Snapshot)
+// 1. ประมวลผล AJAX (จ่ายสินค้า / รับคืนสินค้า / ตัด-คืนสต็อก + เช็คสต็อกป้องกันติดลบ)
 // =========================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json; charset=utf-8');
@@ -50,7 +50,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt_get_req->execute([$req_id]);
             $req_info = $stmt_get_req->fetch(PDO::FETCH_ASSOC);
             
-            // ป้องกัน Foreign Key Error: หากไม่มีการระบุโครงการ หรือ installation_id <= 0 ให้กำหนดเป็น NULL
             $installation_id = (!empty($req_info['installation_id']) && intval($req_info['installation_id']) > 0) 
                 ? intval($req_info['installation_id']) 
                 : null;
@@ -59,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             $stmt_get_old_item = $pdo->prepare("SELECT product_id, issued_qty, returned_qty FROM requisition_items WHERE id = ?");
             $stmt_update_item  = $pdo->prepare("UPDATE requisition_items SET issued_qty = ?, returned_qty = ?, remark = ? WHERE id = ?");
-            $stmt_get_product  = $pdo->prepare("SELECT cost_price FROM products WHERE id = ?");
+            $stmt_get_product  = $pdo->prepare("SELECT name, cost_price, stock_quantity FROM products WHERE id = ? FOR UPDATE");
             $stmt_deduct_stock = $pdo->prepare("UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?");
             $stmt_add_stock    = $pdo->prepare("UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?");
             
@@ -68,8 +67,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             foreach ($item_ids as $index => $item_id) {
                 $item_id      = intval($item_id);
                 $p_id         = intval($product_ids[$index] ?? 0);
-                $new_issued   = intval($issued_qtys[$index] ?? 0);
-                $new_returned = intval($returned_qtys[$index] ?? 0);
+                $new_issued   = floatval($issued_qtys[$index] ?? 0);
+                $new_returned = floatval($returned_qtys[$index] ?? 0);
                 $remark       = trim($item_remarks[$index] ?? '');
 
                 $stmt_get_old_item->execute([$item_id]);
@@ -79,8 +78,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     if ($p_id <= 0) {
                         $p_id = intval($old_item['product_id'] ?? 0);
                     }
-                    $old_issued   = intval($old_item['issued_qty'] ?? 0);
-                    $old_returned = intval($old_item['returned_qty'] ?? 0);
+                    $old_issued   = floatval($old_item['issued_qty'] ?? 0);
+                    $old_returned = floatval($old_item['returned_qty'] ?? 0);
                 } else {
                     $old_issued = 0;
                     $old_returned = 0;
@@ -94,6 +93,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $stmt_get_product->execute([$p_id]);
                     $prod_data = $stmt_get_product->fetch(PDO::FETCH_ASSOC);
                     $current_cost_price = floatval($prod_data['cost_price'] ?? 0.00);
+                    $available_stock = floatval($prod_data['stock_quantity'] ?? 0);
+                    $product_name = $prod_data['name'] ?? 'สินค้า';
+
+                    // ตรวจสอบป้องกันสต็อกติดลบ หากมีการจ่ายเพิ่มมากกว่าสต็อกคงเหลือจริง
+                    if ($diff_issued > 0 && $available_stock < $diff_issued) {
+                        throw new Exception("สินค้า \"{$product_name}\" ในคลังเหลือไม่พอจ่าย (เหลือในคลัง {$available_stock} ชิ้น แต่ต้องการจ่ายเพิ่ม {$diff_issued} ชิ้น)");
+                    }
                 }
 
                 $stmt_update_item->execute([$new_issued, $new_returned, $remark, $item_id]);
@@ -109,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $stmt_trans->bindValue(2, null, PDO::PARAM_NULL);
                     }
                     $stmt_trans->bindValue(3, 'out', PDO::PARAM_STR);
-                    $stmt_trans->bindValue(4, $diff_issued, PDO::PARAM_INT);
+                    $stmt_trans->bindValue(4, $diff_issued, PDO::PARAM_STR);
                     $stmt_trans->bindValue(5, $current_cost_price);
                     $stmt_trans->bindValue(6, $user_id, PDO::PARAM_INT);
                     $stmt_trans->bindValue(7, 'REQ-#' . $req_id, PDO::PARAM_STR);
@@ -127,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $stmt_trans->bindValue(2, null, PDO::PARAM_NULL);
                     }
                     $stmt_trans->bindValue(3, 'return', PDO::PARAM_STR);
-                    $stmt_trans->bindValue(4, $diff_returned, PDO::PARAM_INT);
+                    $stmt_trans->bindValue(4, $diff_returned, PDO::PARAM_STR);
                     $stmt_trans->bindValue(5, $current_cost_price);
                     $stmt_trans->bindValue(6, $user_id, PDO::PARAM_INT);
                     $stmt_trans->bindValue(7, 'RET-#' . $req_id, PDO::PARAM_STR);
@@ -140,13 +146,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt_status->execute([$req_id]);
                 $msg = 'รับคืนสินค้า คืนสต็อกเข้าคลังเรียบร้อยแล้ว และเสร็จสิ้น Process ใบเบิกนี้!';
             } else {
-                $msg = 'บันทึกการจ่ายสินค้าด้วยราคาต้นทุนปัจจุบันเรียบร้อยแล้ว';
+                $msg = 'บันทึกการจ่ายสินค้าเรียบร้อยแล้ว';
             }
 
             $pdo->commit();
             echo json_encode(['status' => 'success', 'message' => $msg, 'action' => $action]);
             exit();
-        } catch (PDOException $e) {
+        } catch (Exception $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             echo json_encode(['status' => 'error', 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()]);
             exit();
@@ -178,6 +184,8 @@ try {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SweetAlert2 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -225,8 +233,6 @@ try {
 
         <div class="flex-1 overflow-y-auto p-4 md:p-8">
             <div class="max-w-6xl mx-auto space-y-6">
-                <div id="alertBox" class="hidden px-5 py-4 rounded-2xl text-sm font-medium items-center gap-3 shadow-xs"></div>
-
                 <div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse text-xs min-w-[650px]">
@@ -269,7 +275,7 @@ try {
         </div>
     </main>
 
-    <!-- Modal สำหรับจัดการจ่ายสินค้า รับคืน และตัด/คืนสต็อก -->
+    <!-- Modal สำหรับจัดการจ่ายสินค้า รับคืน และป้องกันสต็อกติดลบ -->
     <div id="detailModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs hidden items-center justify-center z-50 p-4">
         <div class="bg-white rounded-3xl max-w-4xl w-full p-6 md:p-8 space-y-5 shadow-2xl max-h-[92vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b border-slate-100 pb-4">
@@ -357,29 +363,46 @@ try {
             })
             .then(response => response.json())
             .then(data => {
-                const alertBox = document.getElementById('alertBox');
-                alertBox.classList.remove('hidden');
-                
                 if (data.status === 'success') {
-                    alertBox.className = 'px-5 py-4 rounded-2xl text-sm font-medium flex items-center gap-3 shadow-xs bg-emerald-50 text-emerald-800 border border-emerald-200';
-                    alertBox.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-600 text-lg"></i><span>' + data.message + '</span>';
-
-                    if (actionType === 'complete_requisition') {
-                        setTimeout(() => {
+                    Swal.fire({
+                        title: 'สำเร็จ!',
+                        text: data.message,
+                        icon: 'success',
+                        confirmButtonText: 'ตกลง',
+                        confirmButtonColor: '#059669',
+                        customClass: {
+                            popup: 'rounded-3xl font-sans',
+                            confirmButton: 'rounded-xl text-xs font-bold px-6 py-2.5'
+                        }
+                    }).then(() => {
+                        if (actionType === 'complete_requisition') {
                             window.location.href = 'stock_history.php';
-                        }, 1200);
-                    } else {
-                        loadModalData(currentReqId);
-                        setTimeout(() => alertBox.classList.add('hidden'), 4000);
-                    }
+                        } else {
+                            loadModalData(currentReqId);
+                        }
+                    });
                 } else {
-                    alertBox.className = 'px-5 py-4 rounded-2xl text-sm font-medium flex items-center gap-3 shadow-xs bg-rose-50 text-rose-800 border border-rose-200';
-                    alertBox.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-600 text-lg"></i><span>' + data.message + '</span>';
-                    setTimeout(() => alertBox.classList.add('hidden'), 4000);
+                    Swal.fire({
+                        title: 'ไม่สามารถทำรายการได้!',
+                        text: data.message,
+                        icon: 'error',
+                        confirmButtonText: 'ตกลง',
+                        confirmButtonColor: '#e11d48',
+                        customClass: {
+                            popup: 'rounded-3xl font-sans',
+                            confirmButton: 'rounded-xl text-xs font-bold px-6 py-2.5'
+                        }
+                    });
                 }
             })
             .catch(error => {
-                alert('เกิดข้อผิดพลาดในการส่งข้อมูลไปยังเครื่องแม่ข่าย');
+                Swal.fire({
+                    title: 'เกิดข้อผิดพลาด!',
+                    text: 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้',
+                    icon: 'error',
+                    confirmButtonText: 'ตกลง',
+                    confirmButtonColor: '#e11d48'
+                });
             });
         }
 

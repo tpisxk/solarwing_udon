@@ -32,15 +32,40 @@ function sendLineNotification($message, $access_token, $line_ids) {
 // 1. จัดการประมวลผลเมื่อกด Submit ฟอร์มในหน้าเดียวกัน
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'submit_requisition') {
     $product_id      = intval($_POST['product_id'] ?? 0);
-    $quantity        = intval($_POST['quantity'] ?? 0);
+    $quantity        = floatval($_POST['quantity'] ?? 0);
     $installation_id = intval($_POST['installation_id'] ?? 0);
     $note            = trim($_POST['note'] ?? '');
     
-    if ($product_id <= 0 || $quantity <= 0 ||$installation_id <= 0) {
-        $alert_status = 'error';$alert_message = 'กรุณาเลือกสินค้า ระบุจำนวน และเลือกโครงการ/หน้างานให้ครบถ้วน';
+    if ($product_id <= 0 || $quantity <= 0 || $installation_id <= 0) {
+        $alert_status = 'error'; 
+        $alert_message = 'กรุณาเลือกสินค้า ระบุจำนวน และเลือกโครงการ/หน้างานให้ครบถ้วน';
     } else {
         try {
             $pdo->beginTransaction();
+
+            // เช็คสต็อกและตรวจสอบว่ามีสินค้านี้อยู่จริงในตาราง products
+            $stmt_chk = $pdo->prepare("SELECT id, name, category, stock_quantity FROM products WHERE id = ? FOR UPDATE");
+            $stmt_chk->execute([$product_id]);
+            $prod = $stmt_chk->fetch(PDO::FETCH_ASSOC);
+
+            if (!$prod) {
+                throw new Exception("ไม่พบรายการสินค้านี้ในระบบ กรุณาเลือกสินค้าใหม่อีกครั้ง");
+            }
+
+            $current_stock = floatval($prod['stock_quantity'] ?? 0);
+            $product_name = $prod['name'];
+            $cat = trim($prod['category'] ?? 'ชิ้น');
+            $unit_label = $cat !== '' ?$cat : 'ชิ้น';
+
+            // ตรวจสอบว่าสินค้าหมด หรือมีไม่พอเบิก
+            if ($current_stock <= 0) {
+                throw new Exception("สินค้า \"{$product_name}\" ใน Stock หมดแล้ว (คงเหลือ 0 {$unit_label}) ไม่สามารถเบิกได้");
+            }
+
+            if ($current_stock <$quantity) {
+                $formatted_stock = (fmod($current_stock, 1) !== 0.0) ? $current_stock : intval($current_stock);
+                throw new Exception("สินค้า \"{$product_name}\" มีจำนวนไม่พอเบิก (ในคลังเหลือแค่ {$formatted_stock} {$unit_label})");
+            }
 
             // ดึงชื่อโครงการ
             $stmt_inst =$pdo->prepare("SELECT name FROM installations WHERE id = ?");
@@ -48,16 +73,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $inst =$stmt_inst->fetch(PDO::FETCH_ASSOC);
             $project_name =$inst['name'] ?? 'ไม่ระบุโครงการ';
 
-            // ดึงชื่อสินค้า
-            $stmt_prod =$pdo->prepare("SELECT name FROM products WHERE id = ?");
-            $stmt_prod->execute([$product_id]);
-            $prod =$stmt_prod->fetch(PDO::FETCH_ASSOC);
-            $product_name =$prod['name'] ?? 'สินค้าไม่ระบุชื่อ';
-
             // ดึงชื่อผู้ขอ
             $engineer_name = $_SESSION['username'] ?? $_SESSION['user_name'] ?? 'วิศวกร';
 
-            // บันทึกหัวบิล requisitions (ผูก installation_id)
+            // บันทึกหัวบิล requisitions
             $stmt_req =$pdo->prepare("
                 INSERT INTO requisitions (installation_id, project_name, engineer_name, req_date, status, created_at) 
                 VALUES (?, ?, ?, CURDATE(), 'Pending', NOW())
@@ -77,14 +96,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             // ส่ง LINE แจ้งเตือนแอดมิน
             $access_token = "pKse9FestSF5QdY9Hgnb7GtbcJqtXwucA50VBjLmWySwUbwM5JamQDMvlJflPQqTbibghoPRCGrGRnvehBxSooN0xjX6/3I4CF0nSeqbRgtKIBkE1mkxzPgmDKh+Io70jW7o548tAqX67bsJ3JQTBwdB04t89/1O/w1cDnyilFU=";
             $admin_line_ids = [
-                "U61cff0977ce8c9de7bc8a5f949e44a43",
-                "U0b88acf06842b3899ee341a0fce58ba1",
+                // "U61cff0977ce8c9de7bc8a5f949e44a43",
+                // "U0b88acf06842b3899ee341a0fce58ba1",
             ];
 
-            $line_message = "🔔 มีคำขอเบิกสินค้าใหม่ (รอตรวจสอบ)!\n\n" .
+            $formatted_qty = (fmod($quantity, 1) !== 0.0) ?$quantity : intval($quantity);$line_message = "🔔 มีคำขอเบิกสินค้าใหม่ (รอตรวจสอบ)!\n\n" .
                             "📌 ใบเบิก ID: #" . $requisition_id . "\n" .
                             "📦 สินค้า: " . $product_name . "\n" .
-                            "🔢 จำนวน: " . number_format($quantity) . " ชิ้น\n" .
+                            "🔢 จำนวน: " . $formatted_qty . " " . $unit_label . "\n" .
                             "🏗️ โครงการ: " . $project_name . "\n" .
                             "👷 ผู้ขอ: " . $engineer_name . "\n" .
                             (!empty($note) ? "💬 หมายเหตุ: " . $note . "\n" : "") .
@@ -92,17 +111,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
             sendLineNotification($line_message, $access_token,$admin_line_ids);
 
-            // $alert_status = 'success';$alert_message = '⏳ ส่งคำขอเบิกสินค้าและยิง LINE แจ้งเตือนแอดมินเรียบร้อยแล้ว อยู่ระหว่างรอตรวจสอบและอนุมัติ';
+            $alert_status = 'success';$alert_message = 'ส่งคำขอเบิกสินค้าเรียบร้อยแล้ว อยู่ระหว่างรอแอดมินตรวจสอบและอนุมัติ';
         } catch (Exception $e) {
             if ($pdo->inTransaction()) { $pdo->rollBack(); }$alert_status = 'error';
-            $alert_message = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' . $e->getMessage();
+            $alert_message =$e->getMessage();
         }
     }
 }
 
-// 2. ดึงรายการสินค้าสำหรับ Dropdown
+// 2. ดึงรายการสินค้าสำหรับ Dropdown พร้อมแสดงหน่วยจาก category
 try {
-    $stmt_products =$pdo->query("SELECT id, name, stock_quantity FROM products ORDER BY name ASC");
+    $stmt_products =$pdo->query("SELECT id, name, category, stock_quantity FROM products ORDER BY name ASC");
     $products =$stmt_products->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {$products = []; }
 
@@ -112,21 +131,20 @@ try {
     $installationsList =$stmt_installations->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {$installationsList = []; }
 
-// 4. ดึงประวัติการขอเบิกสินค้า
+// 4. ดึงประวัติการขอเบิกสินค้า แบบแยก 1 แถวต่อ 1 รายการสินค้า
 try {
     $stmt_history =$pdo->query("
-        SELECT r.*, i.name AS project_name, 
-               (SELECT GROUP_CONCAT(CONCAT(p.name, ' (', ri.quantity, ' ชิ้น)') SEPARATOR ', ') 
-                FROM requisition_items ri 
-                LEFT JOIN products p ON ri.product_id = p.id 
-                WHERE ri.requisition_id = r.id) AS product_details
+        SELECT r.*, i.name AS project_name, p.name AS product_name, ri.quantity, p.category
         FROM requisitions r
+        INNER JOIN requisition_items ri ON ri.requisition_id = r.id
+        LEFT JOIN products p ON ri.product_id = p.id
         LEFT JOIN installations i ON r.installation_id = i.id
         ORDER BY r.id DESC
         LIMIT 100
     ");
     $stockOutHistory =$stmt_history->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {$stockOutHistory = []; }
+} catch (PDOException $e) {$stockOutHistory = []; 
+}
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -142,6 +160,9 @@ try {
     <!-- Tom Select CDN -->
     <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+
+    <!-- SweetAlert2 CDN สำหรับ Popup -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
         tailwind.config = {
@@ -210,20 +231,6 @@ try {
         </header>
 
         <div class="flex-1 overflow-y-auto p-4 md:p-10 space-y-6">
-            
-            <?php if (!empty($alert_status)): ?>
-                <?php if ($alert_status == 'success'): ?>
-                    <div class="bg-amber-50 border border-amber-200 text-amber-800 px-6 py-4 rounded-2xl text-sm font-medium flex items-center justify-between shadow-xs">
-                        <span><?= $alert_message ?></span>
-                        <a href="stockout_admin.php" class="text-amber-700 font-bold hover:underline text-xs">ปิด</a>
-                    </div>
-                <?php else: ?>
-                    <div class="bg-rose-50 border border-rose-200 text-rose-800 px-6 py-4 rounded-2xl text-sm font-medium flex items-center justify-between shadow-xs">
-                        <span><?= $alert_message ?></span>
-                        <a href="stockout_admin.php" class="text-rose-700 font-bold hover:underline text-xs">ปิด</a>
-                    </div>
-                <?php endif; ?>
-            <?php endif; ?>
 
             <div class="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
                 <div>
@@ -231,8 +238,7 @@ try {
                     <p class="text-xs text-slate-500 mt-1">เลือกรายการสินค้า ระบุจำนวน และโครงการ/หน้างาน เพื่อส่งเรื่องให้แอดมินตรวจสอบก่อนตัดสต็อก</p>
                 </div>
 
-                <!-- action ว่างไว้เพื่อให้ส่งข้อมูลเข้าหน้าตัวเอง (stockout.php) -->
-                <form action="stockout_admin.php" method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <form action="stockout.php" method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <input type="hidden" name="action" value="submit_requisition">
 
                     <div class="space-y-1.5 md:col-span-2">
@@ -240,8 +246,13 @@ try {
                         <select id="product_select" name="product_id" required>
                             <option value="">-- พิมพ์เพื่อค้นหา หรือเลือกสินค้า --</option>
                             <?php foreach ($products as$p): ?>
+                                <?php 
+                                    $p_cat = !empty($p['category']) ?$p['category'] : 'ชิ้น';
+                                    $p_stock = floatval($p['stock_quantity'] ?? 0);
+                                    $display_stock = (fmod($p_stock, 1) !== 0.0) ? $p_stock : intval($p_stock);
+                                ?>
                                 <option value="<?= $p['id'] ?>">
-                                    <?= htmlspecialchars($p['name']) ?> — (คงเหลือ: <?= number_format($p['stock_quantity'] ?? 0) ?> ชิ้น)
+                                    <?= htmlspecialchars($p['name']) ?> — (คงเหลือ: <?= $display_stock ?> <?= $p_cat ?>)
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -249,7 +260,7 @@ try {
 
                     <div class="space-y-1.5">
                         <label class="block text-xs font-semibold text-slate-600">จำนวนที่ขอเบิก <span class="text-rose-500">*</span></label>
-                        <input type="number" name="quantity" min="1" required placeholder="ระบุจำนวน..." class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-medium">
+                        <input type="number" name="quantity" min="0.01" step="any" required placeholder="ระบุจำนวน..." class="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-medium">
                     </div>
 
                     <div class="space-y-1.5 md:col-span-2">
@@ -283,44 +294,46 @@ try {
                     <span class="text-xs text-slate-400 font-medium" id="totalCountText">พบทั้งหมด <?= count($stockOutHistory) ?> รายการ</span>
                 </div>
                 
-                <div class="overflow-x-auto px-6">
-                    <table class="w-full text-left border-collapse text-xs min-w-[700px]">
+                <div class="overflow-x-auto w-full px-6">
+                    <table class="w-full text-left border-collapse text-xs min-w-[750px]">
                         <thead>
                             <tr class="border-b border-slate-100 text-slate-400 uppercase tracking-wider">
-                                <th class="py-3.5 px-4 font-semibold">วันที่ / เวลา</th>
-                                <th class="py-3.5 px-4 font-semibold">รายการสินค้า</th>
-                                <th class="py-3.5 px-4 font-semibold">โครงการ / หน้างาน</th>
-                                <th class="py-3.5 px-4 font-semibold text-center">สถานะการตรวจสอบ</th>
-                                <th class="py-3.5 px-4 font-semibold">ผู้ขอเบิก</th>
+                                <th class="py-3.5 px-4 font-semibold w-2/12">วันที่ / เวลา</th>
+                                <th class="py-3.5 px-4 font-semibold w-4/12">รายการสินค้า</th>
+                                <th class="py-3.5 px-4 font-semibold w-3/12">โครงการ / หน้างาน</th>
+                                <th class="py-3.5 px-4 font-semibold text-center w-3/12">สถานะการตรวจสอบ</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 font-medium text-slate-700" id="stockoutTableBody">
                             <?php if (!empty($stockOutHistory)): ?>
                                 <?php foreach ($stockOutHistory as$row): ?>
+                                    <?php 
+                                        $p_name =$row['product_name'] ?? 'ไม่ระบุสินค้า';
+                                        $qty = floatval($row['quantity'] ?? 0);$formatted_qty = (fmod($qty, 1) !== 0.0) ?$qty : intval($qty);$cat = !empty($row['category']) ?$row['category'] : 'ชิ้น';
+                                    ?>
                                     <tr class="hover:bg-slate-50/80 transition-all stockout-row">
-                                        <td class="py-3.5 px-4 text-slate-500"><?= htmlspecialchars($row['created_at']) ?></td>
-                                        <td class="py-3.5 px-4 font-bold text-slate-900"><?= htmlspecialchars($row['product_details'] ?? 'ไม่พบสินค้า') ?></td>
+                                        <td class="py-3.5 px-4 text-slate-500 whitespace-nowrap"><?= htmlspecialchars($row['created_at']) ?></td>
+                                        <td class="py-3.5 px-4 font-bold text-slate-900"><?= htmlspecialchars($p_name) ?> <span class="text-emerald-600 font-semibold">(<?= $formatted_qty ?> <?= $cat ?>)</span></td>
                                         <td class="py-3.5 px-4 text-blue-600 font-semibold"><?= htmlspecialchars($row['project_name'] ?? 'ส่วนกลาง') ?></td>
                                         <td class="py-3.5 px-4 text-center">
                                             <?php 
                                                 $st =$row['status'] ?? 'Pending';
                                                 if ($st === 'Approved') { 
-                                                    echo '<span class="px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 font-bold">อนุมัติแล้ว (รอรับของ)</span>'; 
+                                                    echo '<span class="px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 font-bold inline-block">อนุมัติแล้ว (รอรับของ)</span>'; 
                                                 } elseif ($st === 'Completed') {
-                                                    echo '<span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-bold">รับของและตัดสต็อกแล้ว</span>';
+                                                    echo '<span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-bold inline-block">รับของและตัดสต็อกแล้ว</span>';
                                                 } elseif ($st === 'Rejected') {
-                                                    echo '<span class="px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 font-bold">ไม่อนุมัติ</span>';
+                                                    echo '<span class="px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 font-bold inline-block">ไม่อนุมัติ</span>';
                                                 } else {
-                                                    echo '<span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-bold">รอแอดมินตรวจสอบ</span>';
+                                                    echo '<span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-bold inline-block">รอแอดมินตรวจสอบ</span>';
                                                 }
                                             ?>
                                         </td>
-                                        <td class="py-3.5 px-4 text-slate-600"><?= htmlspecialchars($row['engineer_name'] ?? '-') ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <tr id="noDataRow">
-                                    <td colspan="5" class="py-12 text-center text-slate-400 font-normal">ยังไม่มีประวัติการขอเบิกสินค้า</td>
+                                    <td colspan="4" class="py-12 text-center text-slate-400 font-normal">ยังไม่มีประวัติการขอเบิกสินค้า</td>
                                 </tr>
                             <?php endif; ?>
                         </tbody>
@@ -422,6 +435,21 @@ try {
             });
 
             updateTablePagination();
+
+            // แสดง SweetAlert2 Popup เมื่อมีข้อความแจ้งเตือนจาก PHP
+            <?php if (!empty($alert_status)): ?>
+                Swal.fire({
+                    title: '<?= $alert_status == "success" ? "สำเร็จ!" : "ไม่สามารถทำรายการได้!" ?>',
+                    text: '<?= addslashes($alert_message) ?>',
+                    icon: '<?= $alert_status ?>',
+                    confirmButtonText: 'ตกลง',
+                    confirmButtonColor: '<?= $alert_status == "success" ? "#059669" : "#e11d48" ?>',
+                    customClass: {
+                        popup: 'rounded-3xl font-sans',
+                        confirmButton: 'rounded-xl text-xs font-bold px-6 py-2.5'
+                    }
+                });
+            <?php endif; ?>
         });
     </script>
 </body>

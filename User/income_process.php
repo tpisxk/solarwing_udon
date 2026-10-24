@@ -4,7 +4,7 @@ require_once '../db/conn.php';
 require_once '../auth_check.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // รับค่า installation_id (ถ้าเลือกส่วนกลาง ค่าจะเป็น NULL)
+    // รับค่า installation_id (ถ้าไม่เลือก ค่าจะเป็น NULL)
     $installation_id = !empty($_POST['installation_id']) ? intval($_POST['installation_id']) : null;
     $title = trim($_POST['title'] ?? '');
     $amount = floatval($_POST['amount'] ?? 0);
@@ -16,13 +16,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    // จัดการอัปโหลดรูปภาพหลักฐาน
+    // จัดการอัปโหลดรูปภาพหลักฐาน / สลิป
     if (isset($_FILES['receipt_image']) && $_FILES['receipt_image']['error'] === UPLOAD_ERR_OK) {
         $file_tmp = $_FILES['receipt_image']['tmp_name'];
         $file_name = $_FILES['receipt_image']['name'];
         $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
 
-        $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+        $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf'];
         if (in_array($file_ext, $allowed_exts)) {
             $new_file_name = 'income_' . time() . '_' . rand(1000, 9999) . '.' . $file_ext;
             $upload_dir = '../uploads/receipts/';
@@ -58,4 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("Location: expenses.php?status=error");
         exit();
     }
+} else {
+    header("Location: expenses.php");
+    exit();
 }

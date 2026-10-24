@@ -16,8 +16,8 @@ if (!isset($_SESSION['user_id'])) {
 
 $current_page = 'expenses_summary';
 
-// รับค่าโครงการที่ถูกเลือกจาก Dropdown ตัวกรอง (ถ้ามี)
-$selected_installation_id = isset($_GET['installation_id']) && $_GET['installation_id'] !== '' ? intval($_GET['installation_id']) : 'all';
+// รับค่าโครงการที่ถูกเลือกจาก Dropdown ตัวกรอง (รองรับ 'all' ได้อย่างถูกต้อง)
+$selected_installation_id = isset($_GET['installation_id']) && $_GET['installation_id'] !== '' ? $_GET['installation_id'] : 'all';
 
 // ดึงรายชื่อโครงการทั้งหมดสำหรับใส่ใน Dropdown ตัวกรอง
 try {
@@ -46,9 +46,11 @@ try {
         FROM installations i
     ";
     $params = [];
-    if ($selected_installation_id !== 'all') {
+    
+    // แก้ไขเงื่อนไขการกรองให้รองรับ 'all' ได้อย่างถูกต้อง
+    if ($selected_installation_id !== 'all' && intval($selected_installation_id) > 0) {
         $sql_proj .= " WHERE i.id = ?";
-        $params[] = $selected_installation_id;
+        $params[] = intval($selected_installation_id);
     }
     $sql_proj .= " ORDER BY i.id DESC";
 
@@ -239,7 +241,7 @@ try {
 
                 <form method="GET" action="" class="flex items-center gap-3 w-full md:w-auto">
                     <select name="installation_id" onchange="this.form.submit()" class="w-full md:w-72 px-4 py-3 border border-slate-200 rounded-2xl text-xs bg-slate-50 focus:outline-none focus:border-emerald-600 font-semibold text-slate-700 cursor-pointer">
-                        <option value="all">-- แสดงทุกโครงการทั้งหมด --</option>
+                        <option value="all" <?= ($selected_installation_id === 'all') ? 'selected' : '' ?>>-- แสดงทุกโครงการทั้งหมด --</option>
                         <?php foreach ($all_installations as $inst): ?>
                             <option value="<?= $inst['id'] ?>" <?= ($selected_installation_id == $inst['id']) ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($inst['name']) ?>
@@ -349,7 +351,6 @@ try {
                                             <div class="font-bold text-slate-900 text-sm flex items-center gap-2">
                                                 <?= htmlspecialchars($p['project_name']) ?>
                                             </div>
-                                            <div class="text-[10px] text-slate-400">ID: #<?= $p['project_id'] ?></div>
                                         </td>
                                         <td class="py-4 px-4 text-center"><?= $badge ?></td>
                                         <td class="py-4 px-4 text-right font-semibold text-emerald-600">+฿<?= number_format($p['project_income'], 2) ?></td>
