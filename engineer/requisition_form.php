@@ -54,31 +54,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $out_of_stock_list = [];
 
-            foreach ($items as$it) {
+            foreach ($items as $it) {
                 $p_id = intval($it['product_id'] ?? 0);
                 $qty = floatval($it['qty'] ?? 0);
 
-                if ($p_id > 0 && $qty > 0) {$stmt_i->execute([$req_id,$p_id, $qty,$it['remark'] ?? '']);
+                if ($p_id > 0 && $qty > 0) {
+                    $stmt_i->execute([$req_id, $p_id, $qty, $it['remark'] ?? '']);
 
-                    $stmt_chk =$pdo->prepare("SELECT name, category, GREATEST(stock_quantity, 0) AS stock_quantity FROM products WHERE id = ?");
+                    $stmt_chk = $pdo->prepare("SELECT name, category, GREATEST(stock_quantity, 0) AS stock_quantity FROM products WHERE id = ?");
                     $stmt_chk->execute([$p_id]);
-                    $prod =$stmt_chk->fetch(PDO::FETCH_ASSOC);
+                    $prod = $stmt_chk->fetch(PDO::FETCH_ASSOC);
 
                     if ($prod) {
                         $current_stock = floatval($prod['stock_quantity']);
                         $cat = trim($prod['category'] ?? 'ชิ้น');
-                        $unit_label = $cat !== '' ?$cat : 'ชิ้น';
+                        $unit_label = $cat !== '' ? $cat : 'ชิ้น';
 
-                        if ($current_stock < $qty) {$needed_qty = $qty -$current_stock;
-                            $stmt_po->execute([$req_id, $p_id,$needed_qty]);
-                            $out_of_stock_list[] =$prod['name'] . " (ขาด " . (fmod($needed_qty, 1) !== 0.0 ?$needed_qty : intval($needed_qty)) . " {$unit_label})";
+                        if ($current_stock < $qty) {
+                            $needed_qty = $qty - $current_stock;
+                            $stmt_po->execute([$req_id, $p_id, $needed_qty]);
+                            $out_of_stock_list[] = $prod['name'] . " (ขาด " . (fmod($needed_qty, 1) !== 0.0 ? $needed_qty : intval($needed_qty)) . " {$unit_label})";
                         }
                     }
                 }
             }
             $pdo->commit();
 
-            // ส่ง LINE แจ้งเตือน (เปลี่ยนมาใช้ stream context แทน cURL เพื่อรองรับทุกเครื่องและขึ้น Host จริงได้)
+            // ส่ง LINE แจ้งเตือน
             $access_token = "pKse9FestSF5QdY9Hgnb7GtbcJqtXwucA50VBjLmWySwUbwM5JamQDMvlJflPQqTbibghoPRCGrGRnvehBxSooN0xjX6/3I4CF0nSeqbRgtKIBkE1mkxzPgmDKh+Io70jW7o548tAqX67bsJ3JQTBwdB04t89/1O/w1cDnyilFU=";
             $admin_line_ids = [
                 "U61cff0977ce8c9de7bc8a5f949e44a43", // ทิว
@@ -94,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $line_message .= "\n\n⚠️ มีสินค้าหมด/ขาดสต็อก :\n- " . implode("\n- ", $out_of_stock_list);
             }
 
-            foreach ($admin_line_ids as$to_id) {
+            foreach ($admin_line_ids as $to_id) {
                 if (empty($to_id)) continue;
                 $line_data = [
                     'to' => $to_id,
@@ -121,14 +123,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head><body>';
             echo '<h2>ใบเบิกของ - SOLAR WING</h2><p><b>โครงการ:</b> ' . htmlspecialchars($_POST['project_name']) . '</p><table border="1"><tr style="background:#059669;color:#fff;"><th>#</th><th>สินค้า</th><th>จำนวน</th><th>หน่วย</th><th>หมายเหตุ</th></tr>';
             $no = 1;
-            foreach ($_POST['item'] ?? [] as$it) {
+            foreach ($_POST['item'] ?? [] as $it) {
                 $qty = floatval($it['qty'] ?? 0);
-                if ($it['product_id'] > 0 &&$qty > 0) {
-                    $p_name = '-';$p_unit = 'ชิ้น';
-                    foreach ($products as$p) {
-                        if ($p['id'] ==$it['product_id']) {
-                            $p_name =$p['name'] . ($p['sku'] ? " ({$p['sku']})" : '');
-                            $p_unit = !empty($p['category']) ?$p['category'] : 'ชิ้น';
+                if ($it['product_id'] > 0 && $qty > 0) {
+                    $p_name = '-'; $p_unit = 'ชิ้น';
+                    foreach ($products as $p) {
+                        if ($p['id'] == $it['product_id']) {
+                            $p_name = $p['name'] . ($p['sku'] ? " ({$p['sku']})" : '');
+                            $p_unit = !empty($p['category']) ? $p['category'] : 'ชิ้น';
                         }
                     }
                     echo "<tr><td align='center'>" . $no++ . "</td><td>" . htmlspecialchars($p_name) . "</td><td align='center'>" . $qty . "</td><td align='center'>" . htmlspecialchars($p_unit) . "</td><td>" . htmlspecialchars($it['remark']) . "</td></tr>";
@@ -138,8 +140,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         }
     } catch (Exception $e) {
-        if ($pdo->inTransaction())$pdo->rollBack();
-        $error_msg =$e->getMessage();
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        $error_msg = $e->getMessage();
     }
 }
 ?>
@@ -148,7 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ใบเบิกของ - SolarStock Pro</title>
+    <title>ใบเบิกของ - Solarwing Engineer</title>
     <link rel="icon" type="image/png" href="../Pic/456456.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -182,7 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="flex gap-2">
                         <select id="templateSelect" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs bg-white font-medium">
                             <option value="">-- เลือก Template ฟอร์มสำเร็จรูป --</option>
-                            <?php foreach ($templates as$t): ?><option value="<?= $t['id'] ?>"><?= htmlspecialchars($t['template_name']) ?></option><?php endforeach; ?>
+                            <?php foreach ($templates as $t): ?><option value="<?= $t['id'] ?>"><?= htmlspecialchars($t['template_name']) ?></option><?php endforeach; ?>
                         </select>
                         <button type="button" onclick="loadTemplate()" class="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold shrink-0"><i class="fa-solid fa-bolt text-amber-400"></i> โหลด</button>
                     </div>
@@ -199,7 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <label class="block text-xs font-bold text-slate-700 uppercase mb-1.5">โครงการ / หน้างาน <span class="text-rose-500">*</span></label>
                             <select name="installation_id" onchange="document.getElementById('project_name').value = this.options[this.selectedIndex].getAttribute('data-name') || ''" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-white font-semibold">
                                 <option value="">-- เลือกโครงการ --</option>
-                                <?php foreach ($projects as$p): ?><option value="<?= $p['id'] ?>" data-name="<?= htmlspecialchars($p['name']) ?>"><?= htmlspecialchars($p['name']) ?></option><?php endforeach; ?>
+                                <?php foreach ($projects as $p): ?><option value="<?= $p['id'] ?>" data-name="<?= htmlspecialchars($p['name']) ?>"><?= htmlspecialchars($p['name']) ?></option><?php endforeach; ?>
                             </select>
                             <input type="hidden" name="project_name" id="project_name">
                         </div>
@@ -335,7 +337,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         document.addEventListener('click', e => { if (!e.target.closest('.custom-dropdown')) document.querySelectorAll('.dropdown-list').forEach(l => l.classList.add('hidden')); });
 
-        function addRow(pId = '', qty = '0', remark = '') {
+        function addRow(pId = '', qty = '', remark = '') {
             const tbody = document.getElementById('tableBody');
             const idx = tbody.rows.length;
             const p = productsData.find(x => x.id == pId) || {};
@@ -359,11 +361,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </td>
                 <td class="py-3 px-4 text-center">
                     <div class="flex items-center gap-1.5">
-                        <input type="number" name="item[${idx}][qty]" min="0" step="any" value="${qty}" placeholder="0" class="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-center font-bold">
+                        <input type="number" name="item[${idx}][qty]" min="0" step="any" value="${qty !== '' ? qty : 0}" placeholder="0" class="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-center font-bold">
                         <span id="unit_label_${idx}" class="text-[11px] font-bold text-slate-500 whitespace-nowrap">${unit}</span>
                     </div>
                 </td>
-                <td class="py-3 px-4"><input type="text" name="item[${idx}][remark]" value="${remark}" placeholder="หมายเหตุ..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200"></td>
+                <td class="py-3 px-4"><input type="text" name="item[${idx}][remark]" value="${remark || ''}" placeholder="หมายเหตุ..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200"></td>
                 <td class="py-3 px-3 text-center"><button type="button" onclick="this.closest('tr').remove(); recalculate();" class="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center mx-auto"><i class="fa-solid fa-trash text-xs"></i></button></td>
             `;
             tbody.appendChild(tr);
@@ -413,37 +415,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 let rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
                 let items = [];
                 
-                rows.forEach(r => {
-                    if (!r || r.length === 0) return;
+                rows.forEach((r, index) => {
+                    if (index < 2 || !r || r.length === 0) return;
                     
-                    let foundName = '';
-                    let foundQty = 0;
-                    let foundRem = '';
-                    
-                    r.forEach(cell => {
-                        let val = String(cell || '').trim();
-                        if (!val) return;
-                        
-                        let num = parseFloat(val);
-                        if (!isNaN(num) && num > 0 && foundQty === 0 && val.length < 10) {
-                            foundQty = num;
-                        } else if (val.length > 2 && !foundName && isNaN(val)) {
-                            foundName = val;
-                        } else if (foundName && foundQty > 0 && !foundRem && val !== foundName && val != foundQty) {
-                            foundRem = val;
-                        }
+                    let foundName = String(r[1] || '').trim(); // Col B: รายการสินค้า
+                    let foundQty  = parseFloat(r[3]) || 0;     // Col D: จำนวน
+                    let foundRem  = String(r[5] || '').trim(); // Col F: หมายเหตุ
+
+                    if (!foundName || foundQty <= 0) return;
+
+                    let p = productsData.find(x => {
+                        let dbName = (x.name || '').toLowerCase().trim();
+                        let targetName = foundName.toLowerCase().trim();
+                        let dbSku = (x.sku || '').toLowerCase().trim();
+                        return dbName.includes(targetName) || targetName.includes(dbName) || (dbSku && targetName.includes(dbSku));
                     });
 
-                    if (foundName && foundQty > 0) {
-                        let p = productsData.find(x => {
-                            let dbName = (x.name || '').toLowerCase().trim();
-                            let targetName = foundName.toLowerCase().trim();
-                            let dbSku = (x.sku || '').toLowerCase().trim();
-                            return dbName.includes(targetName) || targetName.includes(dbName) || (dbSku && targetName.includes(dbSku));
-                        });
-                        if (p) {
-                            items.push({ product_id: p.id, qty: foundQty, remark: foundRem });
-                        }
+                    if (p) {
+                        items.push({ product_id: p.id, qty: foundQty, remark: foundRem });
                     }
                 });
 

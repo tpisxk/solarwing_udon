@@ -125,7 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 mb-2">หน่วยนับ</label>
-                                <input type="text" name="unit" placeholder="เช่น ชิ้น, แผง" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xs text-slate-800 focus:outline-none focus:border-emerald-600 font-medium transition">
+                                <input type="text" name="category" placeholder="เช่น ชิ้น, แผง" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xs text-slate-800 focus:outline-none focus:border-emerald-600 font-medium transition">
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 mb-2">ราคาทุน (บาท)</label>

@@ -271,7 +271,7 @@ sort($skuGroups);
                 <button onclick="closeImportModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
             </div>
 
-            <form action="import_process.php" method="POST" enctype="multipart/form-data" id="importForm" class="space-y-4">
+            <form action="import_process_adminn.php" method="POST" enctype="multipart/form-data" id="importForm" class="space-y-4">
                 <input type="hidden" name="converted_csv_data" id="convertedCsvData">
 
                 <div class="space-y-2">

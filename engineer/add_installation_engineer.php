@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message_type = 'error';
     } else {
         try {
-            // บันทึกข้อมูลลงตาราง project_designs ครบถ้วนตามโครงสร้างจริง
+            // บันทึกข้อมูลลงตาราง installations ครบถ้วนตามโครงสร้างจริง
             $stmt = $pdo->prepare("INSERT INTO installations (name, system_size, description, map_url, status, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
             $stmt->execute([$name, $system_size, $description, $map_url, $status]);
 
@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Engineer Site Form - SolarStock Pro</title>
+    <title>Engineer Site Form - Solarwing Engineer</title>
     <link rel="icon" type="image/png" href="../Pic/456456.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -137,9 +137,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <textarea name="installation_address" rows="3" placeholder="ระบุรายละเอียดสถานที่ติดตั้งหน้างาน..." class="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen"></textarea>
                         </div>
 
-                        <div class="space-y-1">
-                            <label class="block text-xs font-bold text-slate-600 uppercase">ลิงก์แผนที่ Google Maps (Map URL)</label>
-                            <input type="text" name="map_url" placeholder="https://maps.google.com/?q=..." class="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <label class="block text-xs font-bold text-slate-600 uppercase">ลิงก์แผนที่ Google Maps (Map URL)</label>
+                                <a href="https://www.google.com/maps" target="_blank" class="text-xs font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1">
+                                    <i class="fa-solid fa-external-link-alt text-[10px]"></i> เปิด Google Maps เพื่อหาพิกัด
+                                </a>
+                            </div>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                                    <i class="fa-solid fa-link text-xs"></i>
+                                </span>
+                                <input type="text" name="map_url" id="map_url" placeholder="วางลิงก์ Google Maps ที่นี่ (เช่น https://maps.app.goo.gl/... หรือ https://goo.gl/maps/...)" class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brandGreen">
+                            </div>
+                            <p class="text-[11px] text-slate-400">วิธีใส่: ไปที่ Google Maps > ค้นหาหรือปักหมุดสถานที่หน้างาน > กดปุ่ม <b>"แชร์ (Share)"</b> > กด <b>"คัดลอกลิงก์ (Copy Link)"</b> แล้วนำมาวางในช่องนี้</p>
                         </div>
 
                         <div class="flex flex-col sm:flex-row justify-end pt-4 border-t border-slate-100 gap-3">

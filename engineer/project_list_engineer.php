@@ -9,10 +9,10 @@ require_once '../db/conn.php';
 require_once '../auth_check.php';
 $current_page = 'project_list_engineer.php'; 
 
-$success_msg = '';$error_msg = '';
+$success_msg = ''; $error_msg = '';
 
 // จัดการอัปเดตข้อมูลโครงการผ่าน AJAX หรือ POST ในหน้าเดียวกัน
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) &&$_POST['action'] === 'update_project') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_project') {
     header('Content-Type: application/json; charset=utf-8');
     $proj_id = intval($_POST['project_id'] ?? 0);
     $proj_name = trim($_POST['project_name'] ?? '');
@@ -20,8 +20,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) &&$_POST['a
 
     if ($proj_id > 0 && !empty($proj_name)) {
         try {
-            $stmt_up =$pdo->prepare("UPDATE installations SET name = ?, system_size = ? WHERE id = ?");
-            $stmt_up->execute([$proj_name, $sys_size,$proj_id]);
+            $stmt_up = $pdo->prepare("UPDATE installations SET name = ?, system_size = ? WHERE id = ?");
+            $stmt_up->execute([$proj_name, $sys_size, $proj_id]);
             echo json_encode(['status' => 'success', 'message' => 'อัปเดตข้อมูลโครงการเรียบร้อยแล้ว']);
             exit();
         } catch (PDOException $e) {
@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) &&$_POST['a
 
 // ดึงข้อมูลโครงการ พร้อมคำนวณต้นทุนอุปกรณ์สุทธิจาก stock_transactions ที่ผูกกับ installation_id
 try {
-    $stmt =$pdo->query("
+    $stmt = $pdo->query("
         SELECT 
             i.*,
             SUM(CASE WHEN st.type = 'out' THEN st.quantity * p.cost_price ELSE 0 END) as total_out,
@@ -46,12 +46,13 @@ try {
         GROUP BY i.id
         ORDER BY i.id DESC
     ");
-    $locationsList =$stmt->fetchAll(PDO::FETCH_ASSOC);
+    $locationsList = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     try {
-        $stmt_fallback =$pdo->query("SELECT * FROM installations ORDER BY id DESC");
-        $locationsList =$stmt_fallback->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Exception $ex) {$locationsList = [];
+        $stmt_fallback = $pdo->query("SELECT * FROM installations ORDER BY id DESC");
+        $locationsList = $stmt_fallback->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $ex) {
+        $locationsList = [];
     }
 }
 ?>
@@ -60,7 +61,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>รายการโครงการและต้นทุนอุปกรณ์ - SolarStock Pro</title>
+    <title>รายการโครงการและต้นทุนอุปกรณ์ - Solarwing Engineer</title>
     <link rel="icon" type="image/png" href="../Pic/456456.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -139,29 +140,41 @@ try {
                         </thead>
                         <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
                             <?php if (!empty($locationsList)): ?>
-                                <?php foreach ($locationsList as$loc): 
-                                    $total_out =$loc['total_out'] ?? 0;
-                                    $total_return =$loc['total_return'] ?? 0;
-                                    $net_cost = $total_out -$total_return;
-                                    $map_url =$loc['map_url'] ?? '';
+                                <?php foreach ($locationsList as $loc): 
+                                    $total_out = $loc['total_out'] ?? 0;
+                                    $total_return = $loc['total_return'] ?? 0;
+                                    $net_cost = $total_out - $total_return;
+                                    $map_url = $loc['map_url'] ?? '';
                                     $sys_size = trim($loc['system_size'] ?? '');
-                                    $proj_name =$loc['name'] ?? $loc['project_name'] ?? '-';$raw_desc = $loc['description'] ?? '';$is_json = (json_decode($raw_desc, true) !== null);$display_desc = $is_json ? '-' : $raw_desc;
+                                    
+                                    // จัดรูปแบบ System Size ให้สะอาดและไม่ขึ้นบรรทัดใหม่มั่วซั่ว
+                                    if (!empty($sys_size)) {
+                                        $sys_size = preg_replace('/[.\s]+$/', '', $sys_size); // ตัดจุดหรือเว้นวรรคท้ายสุดออก
+                                        if (stripos($sys_size, 'kw') === false) {
+                                            $sys_size .= ' kWp';
+                                        }
+                                    }
+
+                                    $proj_name = $loc['name'] ?? $loc['project_name'] ?? '-';
+                                    $raw_desc = $loc['description'] ?? '';
+                                    $is_json = (json_decode($raw_desc, true) !== null);
+                                    $display_desc = $is_json ? '-' : $raw_desc;
                                 ?>
                                     <tr class="hover:bg-slate-50/80 transition-all">
                                         <td class="py-3.5 px-4 font-bold text-slate-900">
                                             <?= htmlspecialchars($proj_name) ?>
                                         </td>
-                                        <td class="py-3.5 px-4">
+                                        <td class="py-3.5 px-4 whitespace-nowrap">
                                             <?php if (!empty($sys_size)): ?>
-                                                <span class="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-lg text-xs font-bold border border-emerald-200/80 inline-flex items-center gap-1">
-                                                    <i class="fa-solid fa-solar-panel"></i> <?= htmlspecialchars($sys_size) ?><?= (stripos($sys_size, 'kw') === false) ? ' kWp' : '' ?>
+                                                <span class="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-lg text-xs font-bold border border-emerald-200/80 inline-flex items-center gap-1.5">
+                                                    <i class="fa-solid fa-solar-panel"></i> <span><?= htmlspecialchars($sys_size) ?></span>
                                                 </span>
                                             <?php else: ?>
                                                 <span class="text-slate-300">-</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td class="py-3.5 px-4 text-slate-500"><?= htmlspecialchars($display_desc !== '' ?$display_desc : '-') ?></td>
-                                        <td class="py-3.5 px-4 text-center">
+                                        <td class="py-3.5 px-4 text-slate-500 max-w-xs truncate"><?= htmlspecialchars($display_desc !== '' ? $display_desc : '-') ?></td>
+                                        <td class="py-3.5 px-4 text-center whitespace-nowrap">
                                             <?php if (!empty($map_url)): ?>
                                                 <a href="<?= htmlspecialchars($map_url) ?>" target="_blank" class="inline-flex items-center gap-1.5 bg-sky-50 text-sky-700 border border-sky-200/60 px-3 py-1.5 rounded-xl font-semibold hover:bg-sky-100 transition-all">
                                                     <i class="fa-solid fa-map-location-dot"></i> เปิดแผนที่
@@ -170,14 +183,14 @@ try {
                                                 <span class="text-slate-300">- ไม่มีพิกัด -</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td class="py-3.5 px-4 text-right text-slate-600">
+                                        <td class="py-3.5 px-4 text-right text-slate-600 whitespace-nowrap">
                                             <div>เบิก: <?= number_format($total_out, 2) ?></div>
                                             <div class="text-emerald-600">คืน: -<?= number_format($total_return, 2) ?></div>
                                         </td>
-                                        <td class="py-3.5 px-4 text-right font-bold text-indigo-600 text-sm">
+                                        <td class="py-3.5 px-4 text-right font-bold text-indigo-600 text-sm whitespace-nowrap">
                                             <?= number_format($net_cost, 2) ?> บาท
                                         </td>
-                                        <td class="py-3.5 px-4 text-center">
+                                        <td class="py-3.5 px-4 text-center whitespace-nowrap">
                                             <!-- ปุ่มเปิด Modal แก้ไขชื่อโครงการ -->
                                             <button onclick="openEditModal('<?= $loc['id'] ?>', '<?= htmlspecialchars($proj_name, ENT_QUOTES) ?>', '<?= htmlspecialchars($sys_size, ENT_QUOTES) ?>')" class="bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 p-2 rounded-xl transition-all inline-block" title="แก้ไขชื่อโครงการ">
                                                 <i class="fa-solid fa-pen text-xs"></i>
@@ -238,7 +251,9 @@ try {
         function openEditModal(id, name, size) {
             document.getElementById('editProjectId').value = id;
             document.getElementById('editProjectName').value = name;
-            document.getElementById('editSystemSize').value = size;
+            // ทำความสะอาดค่าขนาดติดตั้งในช่อง input modal ให้เรียบร้อย
+            let cleanSize = size.replace(/\s*kWp$/i, '').trim();
+            document.getElementById('editSystemSize').value = cleanSize;
             let modal = document.getElementById('editModal');
             modal.classList.remove('hidden');
             modal.classList.add('flex');

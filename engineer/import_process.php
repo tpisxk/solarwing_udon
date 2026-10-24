@@ -40,8 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['import_submit'])) {
             $pdo->beginTransaction();
             $updatedCount = 0;
 
-            $stmtCheck = $pdo->prepare("SELECT id FROM products WHERE sku = ?");
-            $stmtUpdate = $pdo->prepare("UPDATE products SET name = ?, category = ?, stock_quantity = ?, cost_price = ? WHERE sku = ?");
+            $stmtCheck = $pdo->prepare("SELECT id FROM products WHERE name = ? OR sku = ?");
+            $stmtUpdate = $pdo->prepare("UPDATE products SET category = ?, stock_quantity = stock_quantity + ? WHERE name = ? OR sku = ?");
             $stmtInsert = $pdo->prepare("INSERT INTO products (sku, name, category, stock_quantity, cost_price, selling_price) VALUES (?, ?, ?, ?, ?, ?)");
 
             foreach ($rows as $index => $data) {
@@ -49,31 +49,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['import_submit'])) {
                 if ($index === 0) {
                     $firstCol = strtolower(trim($data[0] ?? ''));
                     $secondCol = strtolower(trim($data[1] ?? ''));
-                    if (str_contains($firstCol, 'sku') || str_contains($firstCol, 'รหัส') || str_contains($secondCol, 'ชื่อ')) {
+                    if (str_contains($firstCol, 'ลำดับ') || str_contains($firstCol, 'no') || str_contains($secondCol, 'รายการ')) {
                         continue;
                     }
                 }
 
-                // ดึงข้อมูลตามลำดับคอลัมน์จากภาพไฟล์ Excel จริง
-                $sku = trim($data[0] ?? '');           // Col A: รหัสสินค้า
-                $name = trim($data[1] ?? '');          // Col B: ชื่อสินค้า[cite: 3]
+                // ดึงข้อมูลตามตำแหน่งคอลัมน์จริงจากไฟล์ Excel
+                // Col A [0] = ลำดับที่
+                // Col B [1] = รายการ (ชื่อสินค้า)
+                // Col C [2] = รุ่น/ขนาด
+                // Col D [3] = จำนวน
+                // Col E [4] = หน่วย
+                // Col F [5] = หมายเหตุ
 
-                if ($sku !== '' && $name !== '') {
-                    $category = trim($data[2] ?? '-');     // Col C: หน่วยนับ (เก็บลง category)[cite: 3]
-                    $stock_quantity = intval(str_replace(',', '', $data[3] ?? 0)); // Col D: จำนวนคงเหลือ[cite: 3]
-                    $cost_price = floatval(str_replace(',', '', $data[5] ?? 0));   // Col F: ต้นทุนเฉลี่ย[cite: 3]
-                    $selling_price = $cost_price;          // กำหนดราคาขายเริ่มต้นเท่ากับต้นทุน (ปรับเปลี่ยนได้ตามต้องการ)
+                $name           = trim($data[1] ?? '');                      // ชื่อสินค้า / รายการ
+                $sku            = $name;                                     // ใช้ชื่อสินค้าเป็น SKU หลัก
+                $stock_quantity = intval(str_replace(',', '', $data[3] ?? 0)); // จำนวน
+                $unit           = trim($data[4] ?? '-');                     // หน่วยนับ (เก็บลง category)
 
-                    // เช็คว่ามี SKU นี้ในระบบหรือยัง
-                    $stmtCheck->execute([$sku]);
+                if ($name !== '' && $stock_quantity > 0) {
+                    $cost_price    = 0.00;
+                    $selling_price = 0.00;
+
+                    // เช็คว่ามีสินค้านี้ในระบบหรือยัง (เช็คจากชื่อหรือ SKU)
+                    $stmtCheck->execute([$name, $sku]);
                     $existingProduct = $stmtCheck->fetch(PDO::FETCH_ASSOC);
 
                     if ($existingProduct) {
-                        // อัปเดตข้อมูลเดิม
-                        $stmtUpdate->execute([$name, $category, $stock_quantity, $cost_price, $sku]);
+                        // อัปเดตหน่วยนับและเพิ่มจำนวนสต็อกสะสม
+                        $stmtUpdate->execute([$unit, $stock_quantity, $name, $sku]);
                     } else {
-                        // เพิ่มข้อมูลใหม่
-                        $stmtInsert->execute([$sku, $name, $category, $stock_quantity, $cost_price, $selling_price]);
+                        // เพิ่มข้อมูลใหม่ลงในตาราง products
+                        $stmtInsert->execute([$sku, $name, $unit, $stock_quantity, $cost_price, $selling_price]);
                     }
                     
                     $updatedCount++;
